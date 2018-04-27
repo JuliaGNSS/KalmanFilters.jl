@@ -1,3 +1,3 @@
- # A Julia Unscented Kalman Filter implementation
+# A Julia Unscented Kalman Filter implementation
 
- ## It's Awesome
+## It's Awesome
