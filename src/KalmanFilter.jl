@@ -1,4 +1,6 @@
-module UKF
+module KalmanFilter
+
+    export calc_weights, calc_sigma_points, time_update, augment, measurement_update, time_update_linear
 
     struct Weights
         λ::Float64
@@ -14,19 +16,19 @@ module UKF
     end
 
     function calc_sigma_points(x, P, n, weights)
-        √⋅ = sqrt(n + weights.λ) * chol(P)'
-        [x x + √⋅ x - √⋅]
+        √ = sqrt(n + weights.λ) * chol(P)'
+        [x x + √ x - √]
     end
 
-    function time_update(χ, f)
+    function time_update(χ, f, weights)
         χ_next = mapslices(f, χ, 1)
         x_next = χ_next * weights.m
         P_next = (χ_next - x_next) .* weights.c' * (χ_next - x_next)'
         χ_next, x_next, P_next
     end
 
-    function time_update(χ, f, Q)
-        χ_next, x_next, P_next = time_update(χ, f)
+    function time_update(χ, f, Q, weights)
+        χ_next, x_next, P_next = time_update(χ, f, weights)
         χ_next, x_next, P_next + Q
     end
 
@@ -51,11 +53,10 @@ module UKF
         ỹ = y - ŷ # Innovation
         Pyy = (𝓨 - ŷ) .* weights.c' * (𝓨 - ŷ)' # Innovation covariance
         Pxy = (χ - x) .* weights.c' * (𝓨 - ŷ)' # Cross covariance
-        NIS = ỹ' * Pyy \ ỹ # Normalised innovations squared
         K = Pxy / Pyy # Kalman gain
         x_next = x + K * ỹ
         P_next = P - K * Pyy * K'
-        x_next, P_next, NIS
+        x_next, P_next, ỹ, Pyy
     end
 
 end

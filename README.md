@@ -1,3 +1,19 @@
-# A Julia Unscented Kalman Filter implementation
+# KalmanFilter
+Provides multiple Kalman Filters like KF, AKF, UKF, AUKF
 
-## It's Awesome
+## Getting started
+
+Install:
+```julia
+Pkg.clone("git@git.rwth-aachen.de:nav/KalmanFilter.jl.git")
+```
+
+## Usage
+
+```julia
+using KalmanFilter
+```
+
+## License
+
+MIT License
