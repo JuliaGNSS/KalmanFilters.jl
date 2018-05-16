@@ -1,10 +1,11 @@
-using UKF
+using Base.Test, KalmanFilter
 
-@testset "UKF" begin
+@testset "Sigma points" begin
 
-    # Generate some simulated data
-    y = sin(0:0.1:100) * amplitude + randn(100) * noise_std
-
-    weights = calc_weights(1e-3, 2, 0, 20)
-    #...
+    x = [0, 1]
+    P = diagm([2, 3])
+    weights = Weights(1, 2, 0, length(x))
+    χ = KalmanFilter.calc_sigma_points(x, P, weights)
+    @test mean(χ, 2) ≈ x
+    @test var(χ, 2) ≈ diag(P)
 end
