@@ -1,7 +1,7 @@
 module KalmanFilter
 
-    struct Augment
-        cov::Matrix
+    struct Augment{T}
+        cov::T
     end
 
     export Weights, Augment, init_kalman
@@ -24,18 +24,18 @@ module KalmanFilter
         num_states = length(𝐱)
         𝐱_init = copy(𝐱)
         𝐏_init = copy(𝐏)
-        rtn_time_update(𝐟_or_𝐓, 𝐐, used_states::Vector = trues(num_states)) = 
+        rtn_time_update(𝐟_or_𝐓, 𝐐, used_states::BitArray{1} = trues(num_states)) = 
             time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, weights, 𝐟_or_𝐓, 𝐐, used_states, reset_unused_states)
-        rtn_time_update(𝐟_or_𝐓, 𝐐, 𝐑, used_states::Vector = trues(num_states)) = 
+        rtn_time_update(𝐟_or_𝐓, 𝐐, 𝐑, used_states::BitArray{1} = trues(num_states)) = 
             time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, weights, 𝐟_or_𝐓, 𝐐, 𝐑, used_states, reset_unused_states)
         rtn_time_update
     end
 
-    function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, weights, 𝐟_or_𝐓, 𝐐::Matrix, used_states, reset_unused_states)
+    function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, weights, 𝐟_or_𝐓, 𝐐, used_states, reset_unused_states)
         part_𝐱, part_𝐏 = filter_states(𝐱, 𝐏, used_states)
         iweights = InternalWeights(weights, sum(used_states))
         time_update_output = _time_update(part_𝐱, part_𝐏, iweights, 𝐟_or_𝐓, 𝐐)
-        (𝐲, 𝐇, 𝐑) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, time_update_output..., iweights, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
+        (𝐲, 𝐇, 𝐑) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, time_update_output..., iweights, weights, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
     end
     
     function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, weights, 𝐟_or_𝐓, 𝐐::Augment, used_states, reset_unused_states)
@@ -43,7 +43,7 @@ module KalmanFilter
         part_𝐱ᵃ, part_𝐏ᵃ = augment(part_𝐱, part_𝐏, 𝐐)
         iweights = InternalWeights(weights, sum(used_states))
         time_update_output = _time_update(part_𝐱ᵃ, part_𝐏ᵃ, iweights, 𝐟_or_𝐓, 0)
-        (𝐲, 𝐇, 𝐑) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, time_update_output..., iweights, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
+        (𝐲, 𝐇, 𝐑) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, time_update_output..., iweights, weights, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
     end
     
     function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, weights, 𝐟_or_𝐓, 𝐐::Augment, 𝐑::Augment, used_states, reset_unused_states)
@@ -51,7 +51,7 @@ module KalmanFilter
         part_𝐱ᵃ, part_𝐏ᵃ = augment(part_𝐱, part_𝐏, 𝐐, 𝐑)
         iweights = InternalWeights(weights, sum(used_states))
         time_update_output = _time_update(part_𝐱ᵃ, part_𝐏ᵃ, iweights, 𝐟_or_𝐓, 0)
-        (𝐲, 𝐇) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, time_update_output..., iweights, 𝐲, 𝐇, used_states, reset_unused_states)
+        (𝐲, 𝐇) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, time_update_output..., iweights, weights, 𝐲, 𝐇, used_states, reset_unused_states)
     end
 
     function filter_states(𝐱, 𝐏, used_states)
