@@ -23,7 +23,7 @@ function _time_update(χ, scales, 𝐟::Function, 𝐐)
     num_states = size(χ, 1)
     χ_next = mapslices(𝐟, χ, 1)
     𝐱_next = χ_next * mean_weights(scales, num_states)
-    𝐏_next = (χ_next - 𝐱_next) .* cov_weights(scales, num_states)' * (χ_next - 𝐱_next)' + 𝐐
+    𝐏_next = (χ_next .- 𝐱_next) .* cov_weights(scales, num_states)' * (χ_next .- 𝐱_next)' + 𝐐
     χ_next, 𝐱_next, 𝐏_next
 end
 
