@@ -6,7 +6,6 @@ before_script:
 testjob:
   script:
     - julia -e 'Pkg.test("KalmanFilter", coverage=true)'
-  after_script:
     - julia -e 'Pkg.add("Coverage"); cd(Pkg.dir("KalmanFilter"));
       using Coverage; cl, tl = get_summary(process_folder());
       println("(", cl/tl*100, "%) covered")'
