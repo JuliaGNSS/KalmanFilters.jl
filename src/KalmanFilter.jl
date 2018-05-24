@@ -51,7 +51,7 @@ module KalmanFilter
     transition, which can be of type scalar, Matrix or Function. In the latter case the transition is
     assumed to be non-linear and the Unscented Kalman Filter (UKF) is used instead of the Kalman Filter (KF).
     """
-    function init_kalman(𝐱, 𝐏, scales = ScalingParameters(1, 2, 0), reset_unused_states = true)
+    function init_kalman(𝐱, 𝐏, scales = ScalingParameters(1e-3, 2, 0), reset_unused_states = true)
         num_states = length(𝐱)
         𝐱_init = copy(𝐱)
         𝐏_init = copy(𝐏)
