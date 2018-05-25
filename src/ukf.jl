@@ -44,7 +44,7 @@ function _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, h::Function, 𝐑)
     𝐊 = 𝐏xy / 𝐏yy # Kalman gain
     𝐱_next = 𝐱 + 𝐊 * 𝐲̃
     𝐏_next = 𝐏 - 𝐊 * 𝐏yy * 𝐊'
-    𝐱_next, 𝐏_next, 𝐲̂, 𝐏yy
+    𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
 """
