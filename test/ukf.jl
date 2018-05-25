@@ -21,10 +21,80 @@ end
     @test 𝐏_next ≈ zeros(2,2) rtol = 1
 end
 
-@testset "UKF time update without augmentation" begin
-    used_states = trues(2)
+@testset "UKF time update UKF measurement update without augmentation" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, 𝐟, 𝐐, used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, 𝐡, 𝐑)
+    @test 𝐏_next ≈ diagm([5/3, 7/4]) # ??
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "UKF time update UKF measurement update with augmented 𝐐" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, x -> [x[1] + x[3]; x[2] + x[4]], Augment(𝐐), used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, 𝐡, 𝐑)
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "UKF time update UKF measurement update with augmented 𝐐 and 𝐑" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, x -> [x[1] + x[3]; x[2] + x[4]; x[5]; x[6]], Augment(𝐐), Augment(𝐑), used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, x -> [x[1] + x[3]; x[2] + x[4]])
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "KF time update UKF measurement update without augmentation" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, 𝐅, 𝐐, used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, 𝐡, 𝐑)
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "KF time update UKF measurement update with augmented 𝐐" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, [𝐅 eye(2)], Augment(𝐐), used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, 𝐡, 𝐑)
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "KF time update UKF measurement update with augmented 𝐑" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, 𝐅, 𝐐, used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, x -> [x[1] + x[3]; x[2] + x[4]], Augment(𝐑))
+    @test 𝐏_next ≈ diagm([3/4, 4/5]) # ??
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "KF time update UKF measurement update with augmented 𝐐 and 𝐑" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, [𝐅 eye(2) zeros(2,2); zeros(2,4) eye(2)], Augment(𝐐), Augment(𝐑), used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, x -> [x[1] + x[3]; x[2] + x[4]])
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "UKF time update KF measurement update without augmentation" begin
     measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, 𝐟, 𝐐, used_states, false)
     time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, 𝐇, 𝐑)
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "UKF time update KF measurement update with augmented 𝐐" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, x -> [x[1] + x[3]; x[2] + x[4]], Augment(𝐐), used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, 𝐇, 𝐑)
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "UKF time update KF measurement update with augmented 𝐑" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, 𝐟, 𝐐, used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, [𝐇 eye(2)], Augment(𝐑))
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
+    @test 𝐱_next ≈ 𝐱 
+end
+
+@testset "UKF time update KF measurement update with augmented 𝐐 and 𝐑" begin
+    measurement_update = KalmanFilter.time_update(𝐱, 𝐏, 𝐱, 𝐏, scales, x -> [x[1] + x[3]; x[2] + x[4]; x[5]; x[6]], Augment(𝐐), Augment(𝐑), used_states, false)
+    time_update, 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy = measurement_update(𝐲, [𝐇 eye(2)])
+    @test 𝐏_next ≈ diagm([3/4, 4/5])
     @test 𝐱_next ≈ 𝐱 
 end
 

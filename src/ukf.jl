@@ -36,11 +36,11 @@ the innovation and the innovation covariance.
 """
 function _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, h::Function, 𝐑)
     𝓨 = mapslices(h, χ, 1)
-    num_states = size(χ, 1)
-    𝐲̂ = 𝓨 * mean_weights(scales, num_states)
+    num_aug_states = floor(Int, size(χ, 2) / 2)
+    𝐲̂ = 𝓨 * mean_weights(scales, num_aug_states)
     𝐲̃ = 𝐲 - 𝐲̂ # Innovation
-    𝐏yy = (𝓨 .- 𝐲̂) .* cov_weights(scales, num_states)' * (𝓨 .- 𝐲̂)' + 𝐑 # Innovation covariance
-    𝐏xy = (χ[1:length(𝐱),:] .- 𝐱) .* cov_weights(scales, num_states)' * (𝓨 .- 𝐲̂)' # Cross covariance
+    𝐏yy = (𝓨 .- 𝐲̂) .* cov_weights(scales, num_aug_states)' * (𝓨 .- 𝐲̂)' + 𝐑 # Innovation covariance
+    𝐏xy = (χ[1:length(𝐱),:] .- 𝐱) .* cov_weights(scales, num_aug_states)' * (𝓨 .- 𝐲̂)' # Cross covariance
     𝐊 = 𝐏xy / 𝐏yy # Kalman gain
     𝐱_next = 𝐱 + 𝐊 * 𝐲̃
     𝐏_next = 𝐏 - 𝐊 * 𝐏yy * 𝐊'
