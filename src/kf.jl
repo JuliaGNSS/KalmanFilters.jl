@@ -4,9 +4,9 @@ $(SIGNATURES)
 KF time update.
 Returns the time updated states and the time updated covariance.
 """
-function _time_update(𝐱, 𝐏, 𝐓, 𝐐)
-    𝐱_next = 𝐓 * 𝐱
-    𝐏_next = 𝐓 * 𝐏 * 𝐓' + 𝐐
+function _time_update(𝐱, 𝐏, 𝐅, 𝐐)
+    𝐱_next = 𝐅 * 𝐱
+    𝐏_next = 𝐅 * 𝐏 * 𝐅' + 𝐐
     𝐱_next, 𝐏_next
 end
 
@@ -34,9 +34,9 @@ KF time update.
 The transition noise covariance `𝐐` is NOT augmented.
 Returns a measurement update function.
 """
-function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐓, 𝐐, used_states, reset_unused_states)
+function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐅, 𝐐, used_states, reset_unused_states)
     part_𝐱, part_𝐏 = filter_states(𝐱, 𝐏, used_states)
-    𝐱_next, 𝐏_next = _time_update(part_𝐱, part_𝐏, 𝐓, 𝐐)
+    𝐱_next, 𝐏_next = _time_update(part_𝐱, part_𝐏, 𝐅, 𝐐)
     (𝐲, 𝐇, 𝐑) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, 𝐱_next, 𝐏_next, scales, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
 end
 
@@ -47,10 +47,10 @@ KF time update.
 The transition noise covariance `𝐐` is augmented.
 Returns a measurement update function.
 """
-function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐓, 𝐐::Augment, used_states, reset_unused_states)
+function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐅, 𝐐::Augment, used_states, reset_unused_states)
     part_𝐱, part_𝐏 = filter_states(𝐱, 𝐏, used_states)
     part_𝐱ᵃ, part_𝐏ᵃ = augment(part_𝐱, part_𝐏, 𝐐)
-    𝐱_next, 𝐏_next = _time_update(part_𝐱ᵃ, part_𝐏ᵃ, 𝐓, 0)
+    𝐱_next, 𝐏_next = _time_update(part_𝐱ᵃ, part_𝐏ᵃ, 𝐅, 0)
     (𝐲, 𝐇, 𝐑) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, 𝐱_next, 𝐏_next, scales, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
 end
 
@@ -61,10 +61,10 @@ KF time update.
 The transition noise covariance `𝐐` and the measurement noise covariance `𝐑` are augmented.
 Returns a measurement update function.
 """
-function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐓, 𝐐::Augment, 𝐑::Augment, used_states, reset_unused_states)
+function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐅, 𝐐::Augment, 𝐑::Augment, used_states, reset_unused_states)
     part_𝐱, part_𝐏 = filter_states(𝐱, 𝐏, used_states)
     part_𝐱ᵃ, part_𝐏ᵃ = augment(part_𝐱, part_𝐏, 𝐐, 𝐑)
-    𝐱_next, 𝐏_next = _time_update(part_𝐱ᵃ, part_𝐏ᵃ, 𝐓, 0)
+    𝐱_next, 𝐏_next = _time_update(part_𝐱ᵃ, part_𝐏ᵃ, 𝐅, 0)
     (𝐲, 𝐇) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, 𝐱_next, 𝐏_next, scales, 𝐲, 𝐇, used_states, reset_unused_states)
 end
 
@@ -78,10 +78,10 @@ Returns a time update function, the measurement updated states, the measurement 
 the innovation and the innovation covariance.
 """
 function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, 𝐇, used_states, reset_unused_states)
-    part_𝐱_next, part_𝐏_next, 𝐲̂, 𝐏yy = _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 0)
+    part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 0)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐓, 𝐐, 𝐑, used_states::BitArray{1} = trues(length(𝐱))) -> 
-        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐓, 𝐐, 𝐑, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̂, 𝐏yy
+    (𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(length(𝐱))) -> 
+        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, 𝐑, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
 """
@@ -94,10 +94,10 @@ Returns a time update function, the measurement updated states, the measurement 
 the innovation and the innovation covariance.
 """
 function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
-    part_𝐱_next, part_𝐏_next, 𝐲̂, 𝐏yy = _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 𝐑)
+    part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 𝐑)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐓, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) -> 
-        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐓, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̂, 𝐏yy
+    (𝐅, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) -> 
+        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
 """
@@ -111,8 +111,8 @@ the innovation and the innovation covariance.
 """
 function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, 𝐇, 𝐑::Augment, used_states, reset_unused_states)
     𝐱ᵃ, 𝐏ᵃ = augment(𝐱, 𝐏, 𝐑)
-    part_𝐱_next, part_𝐏_next, 𝐲̂, 𝐏yy = _measurement_update(𝐱ᵃ, 𝐏ᵃ, 𝐲, 𝐇, 0)
+    part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱ᵃ, 𝐏ᵃ, 𝐲, 𝐇, 0)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐓, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) -> 
-        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐓, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̂, 𝐏yy
+    (𝐅, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) -> 
+        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end

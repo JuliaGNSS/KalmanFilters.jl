@@ -55,10 +55,10 @@ module KalmanFilter
         num_states = length(𝐱)
         𝐱_init = copy(𝐱)
         𝐏_init = copy(𝐏)
-        rtn_time_update(𝐟_or_𝐓, 𝐐, used_states::BitArray{1} = trues(num_states)) = 
-            time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐓, 𝐐, used_states, reset_unused_states)
-        rtn_time_update(𝐟_or_𝐓, 𝐐, 𝐑, used_states::BitArray{1} = trues(num_states)) = 
-            time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐓, 𝐐, 𝐑, used_states, reset_unused_states)
+        rtn_time_update(𝐟_or_𝐅, 𝐐, used_states::BitArray{1} = trues(num_states)) = 
+            time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐅, 𝐐, used_states, reset_unused_states)
+        rtn_time_update(𝐟_or_𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(num_states)) = 
+            time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐅, 𝐐, 𝐑, used_states, reset_unused_states)
         rtn_time_update
     end
 
