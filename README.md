@@ -24,7 +24,7 @@ using KalmanFilter
 𝐇 = [1 0]
 𝐑 = 0.1
 𝐲 = 5
-time_update = KalmanFilter.init_kalman(𝐱_init, 𝐏_init)
+time_update = init_kalman(𝐱_init, 𝐏_init)
 measurement_update = time_update(𝐅, 𝐐)
 time_update, 𝐱, 𝐏 = measurement_update(𝐲, 𝐇, 𝐑)
 ```
@@ -39,7 +39,7 @@ using KalmanFilter
 𝐡(𝐱) = 𝐱[1]
 𝐑 = 0.1
 𝐲 = 5
-time_update = KalmanFilter.init_kalman(𝐱_init, 𝐏_init)
+time_update = init_kalman(𝐱_init, 𝐏_init)
 measurement_update = time_update(𝐟, 𝐐)
 time_update, 𝐱, 𝐏 = measurement_update(𝐲, 𝐡, 𝐑)
 ```
