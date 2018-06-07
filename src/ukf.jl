@@ -21,7 +21,7 @@ Returns the time updated Sigma Points, the time updated states and the time upda
 """
 function _time_update(χ, scales, 𝐟::Function, 𝐐)
     num_states = size(χ, 1)
-    χ_next = mapslices(𝐟, χ, 1)
+    χ_next = mapreduce(𝐟, hcat, julienne(χ, (:, *)))::Array{Float64, 2} # mapslices(𝐟, χ, 1)
     𝐱_next = χ_next * mean_weights(scales, num_states)
     𝐏_next = (χ_next .- 𝐱_next) .* cov_weights(scales, num_states)' * (χ_next .- 𝐱_next)' + 𝐐
     χ_next, 𝐱_next, 𝐏_next
@@ -34,8 +34,8 @@ UKF measurement update.
 Returns the measurement updated states, the measurement updated covariance,
 the innovation and the innovation covariance.
 """
-function _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, h::Function, 𝐑)
-    𝓨 = mapslices(h, χ, 1)
+function _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, 𝐡::Function, 𝐑)
+    𝓨 = mapreduce(𝐡, hcat, julienne(χ, (:, *)))::Array{Float64, 2} # mapslices(𝐡, χ, 1)
     num_aug_states = floor(Int, size(χ, 2) / 2)
     𝐲̂ = 𝓨 * mean_weights(scales, num_aug_states)
     𝐲̃ = 𝐲 - 𝐲̂ # Innovation

@@ -20,7 +20,7 @@ include("kf.jl")
 
 @testset "Filter states" begin
     curr_used_states = [true, false]
-    part_𝐱, part_𝐏 = KalmanFilter.filter_states(𝐱, 𝐏, curr_used_states)
+    part_𝐱, part_𝐏 = @inferred KalmanFilter.filter_states(𝐱, 𝐏, curr_used_states)
     @test part_𝐱 == [0]
     @test part_𝐏 == 𝐏[curr_used_states, curr_used_states]
 end
@@ -34,12 +34,12 @@ end
     curr_used_states = [true, false]
     part_𝐏 = ones(2,2)[curr_used_states,curr_used_states] * 5
     reset_unused_states = false
-    𝐱_expanded, 𝐏_expanded = KalmanFilter.expand_states(part_𝐱, part_𝐏, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, curr_used_states, reset_unused_states)
+    𝐱_expanded, 𝐏_expanded = @inferred KalmanFilter.expand_states(part_𝐱, part_𝐏, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, curr_used_states, reset_unused_states)
     @test 𝐱_expanded == [3,2]
     @test 𝐏_expanded == diagm([5,4])
 
     reset_unused_states = true
-    𝐱_expanded, 𝐏_expanded = KalmanFilter.expand_states(part_𝐱, part_𝐏, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, curr_used_states, reset_unused_states)
+    𝐱_expanded, 𝐏_expanded = @inferred KalmanFilter.expand_states(part_𝐱, part_𝐏, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, curr_used_states, reset_unused_states)
     @test 𝐱_expanded == [3,1]
     @test 𝐏_expanded == diagm([5,3])
 end

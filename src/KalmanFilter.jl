@@ -1,6 +1,6 @@
 module KalmanFilter
 
-    using DocStringExtensions
+    using DocStringExtensions, JuliennedArrays
 
     struct Augment{T}
         cov::T
