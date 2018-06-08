@@ -3,9 +3,9 @@ using Base.Test, KalmanFilter
 srand(1234)
 
 # Testparameters
-const 𝐱 = [0, 1]
+const 𝐱 = [0.0, 1.0]
 const 𝐲 = [0, 1]
-const 𝐏 = diagm([2, 3])
+const 𝐏 = diagm([2.0, 3.0])
 const scales = ScalingParameters(1e-3, 2, 0)
 const 𝐟(x) = x
 const 𝐡(x) = x

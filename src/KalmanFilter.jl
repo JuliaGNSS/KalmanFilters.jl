@@ -79,14 +79,11 @@ module KalmanFilter
     Updates the previous states with the filtered updated states.
     """
     function expand_states(part_𝐱, part_𝐏, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-        num_states = length(used_states)
         num_used_states = sum(used_states)
-        𝐱 = zeros(num_states)
+        𝐱 = reset_unused_states ? copy(𝐱_init) : copy(𝐱_prev)
         𝐱[used_states] = part_𝐱[1:num_used_states]
-        𝐱 = reset_unused_states ? 𝐱_init .* .!used_states .+ 𝐱 : 𝐱_prev .* .!used_states .+ 𝐱
-        𝐏 = zeros(num_states, num_states)
+        𝐏 = reset_unused_states ? copy(𝐏_init) : copy(𝐏_prev)
         𝐏[used_states, used_states] = part_𝐏[1:num_used_states, 1:num_used_states]
-        𝐏 = reset_unused_states ? 𝐏_init .* .!(used_states * used_states') .+ 𝐏 : 𝐏_prev .* .!(used_states * used_states') .+ 𝐏
         𝐱, 𝐏
     end
 
