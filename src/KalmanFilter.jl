@@ -1,6 +1,6 @@
 module KalmanFilter
 
-    using DocStringExtensions, JuliennedArrays
+    using DocStringExtensions, JuliennedArrays, Distributions
 
     struct Augment{T}
         cov::T
@@ -12,10 +12,11 @@ module KalmanFilter
         κ::Float64
     end
 
-    export ScalingParameters, Augment, init_kalman
+    export ScalingParameters, Augment, init_kalman, mean_num_sigma_bound_exceedings, sigma_bound_test, two_sigma_bound_test, nis_test, nis
 
     include("kf.jl")
     include("ukf.jl")
+    include("tests.jl")
 
     """
     $(SIGNATURES)
@@ -43,7 +44,7 @@ module KalmanFilter
 
     Initialize Kalman Filter.
     `𝐱` is the initial state, `𝐏` is the initial covariance, `scales` is optional and holds the scaling
-    parameters for the UKF and `reset_unused_states` is optional and declares if unused states should be 
+    parameters for the UKF and `reset_unused_states` is optional and declares if unused states should be
     resetted to the initals.
     Returns the time update function. The time update function depends on the transition noise covariance
     matrix `𝐐`, which can be augmented by `Augment(𝐐)`, optionally on the measurement noise covariance
@@ -55,9 +56,9 @@ module KalmanFilter
         num_states = length(𝐱)
         𝐱_init = copy(𝐱)
         𝐏_init = copy(𝐏)
-        rtn_time_update(𝐟_or_𝐅, 𝐐, used_states::BitArray{1} = trues(num_states)) = 
+        rtn_time_update(𝐟_or_𝐅, 𝐐, used_states::BitArray{1} = trues(num_states)) =
             time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐅, 𝐐, used_states, reset_unused_states)
-        rtn_time_update(𝐟_or_𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(num_states)) = 
+        rtn_time_update(𝐟_or_𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(num_states)) =
             time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐅, 𝐐, 𝐑, used_states, reset_unused_states)
         rtn_time_update
     end
