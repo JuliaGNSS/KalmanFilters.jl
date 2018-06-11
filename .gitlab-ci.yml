@@ -1,7 +1,7 @@
 image: julia:0.6
 
 before_script:
-  - apt-get update && apt-get -y install make
+  - apt-get update && apt-get -y install make g++
   - julia -e 'Pkg.clone(pwd())'
 
 testjob:
