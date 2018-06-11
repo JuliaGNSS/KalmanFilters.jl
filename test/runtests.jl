@@ -17,6 +17,8 @@ const used_states = trues(2)
 
 include("ukf.jl")
 include("kf.jl")
+include("tests.jl")
+include("system.jl")
 
 @testset "Filter states" begin
     curr_used_states = [true, false]
