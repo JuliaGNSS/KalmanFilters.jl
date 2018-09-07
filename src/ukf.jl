@@ -9,7 +9,7 @@ Calculate Sigma Points.
 `scales` is of type ScalingParameters.
 """
 function calc_sigma_points(𝐱, 𝐏, scales)
-    𝐏_chol = sqrt(length(𝐱) + λ(scales, length(𝐱))) * chol(Symmetric(𝐏))'
+    𝐏_chol = sqrt(length(𝐱) + λ(scales, length(𝐱))) * (cholesky(Symmetric(𝐏))).U'
     [𝐱 𝐱 .+ 𝐏_chol 𝐱 .- 𝐏_chol]
 end
 
@@ -23,7 +23,7 @@ function _time_update(χ, scales, 𝐟::Function, 𝐐)
     num_states = size(χ, 1)
     χ_next = mapreduce(𝐟, hcat, julienne(χ, (:, *)))::Array{Float64, 2} # mapslices(𝐟, χ, 1)
     𝐱_next = χ_next * mean_weights(scales, num_states)
-    𝐏_next = (χ_next .- 𝐱_next) .* cov_weights(scales, num_states)' * (χ_next .- 𝐱_next)' + 𝐐
+    𝐏_next = (χ_next .- 𝐱_next) .* cov_weights(scales, num_states)' * (χ_next .- 𝐱_next)' .+ 𝐐
     χ_next, 𝐱_next, 𝐏_next
 end
 
@@ -38,8 +38,8 @@ function _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, 𝐡::Function, 𝐑)
     𝓨 = mapreduce(𝐡, hcat, julienne(χ, (:, *)))::Array{Float64, 2} # mapslices(𝐡, χ, 1)
     num_aug_states = floor(Int, size(χ, 2) / 2)
     𝐲̂ = 𝓨 * mean_weights(scales, num_aug_states)
-    𝐲̃ = 𝐲 - 𝐲̂ # Innovation
-    𝐏yy = (𝓨 .- 𝐲̂) .* cov_weights(scales, num_aug_states)' * (𝓨 .- 𝐲̂)' + 𝐑 # Innovation covariance
+    𝐲̃ = 𝐲 .- 𝐲̂ # Innovation
+    𝐏yy = (𝓨 .- 𝐲̂) .* cov_weights(scales, num_aug_states)' * (𝓨 .- 𝐲̂)' .+ 𝐑 # Innovation covariance
     𝐏xy = (χ[1:length(𝐱),:] .- 𝐱) .* cov_weights(scales, num_aug_states)' * (𝓨 .- 𝐲̂)' # Cross covariance
     𝐊 = 𝐏xy / 𝐏yy # Kalman gain
     𝐱_next = 𝐱 + 𝐊 * 𝐲̃

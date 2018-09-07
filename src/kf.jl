@@ -6,7 +6,7 @@ Returns the time updated states and the time updated covariance.
 """
 function _time_update(𝐱, 𝐏, 𝐅, 𝐐)
     𝐱_next = 𝐅 * 𝐱
-    𝐏_next = 𝐅 * 𝐏 * 𝐅' + 𝐐
+    𝐏_next = 𝐅 * 𝐏 * 𝐅' .+ 𝐐
     𝐱_next, 𝐏_next
 end
 
@@ -19,11 +19,11 @@ the innovation and the innovation covariance.
 """
 function _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 𝐑)
     𝐲̂ = 𝐇 * 𝐱
-    𝐲̃ = 𝐲 - 𝐲̂
-    𝐒 = 𝐇 * 𝐏 * 𝐇' + 𝐑
+    𝐲̃ = 𝐲 .- 𝐲̂
+    𝐒 = 𝐇 * 𝐏 * 𝐇' .+ 𝐑
     𝐊 = 𝐏 * 𝐇' / 𝐒
     𝐱_next = 𝐱 + 𝐊 * 𝐲̃
-    𝐏_next = 𝐏 - 𝐊 * 𝐒 * 𝐊'
+    𝐏_next = 𝐏 .- 𝐊 * 𝐒 * 𝐊'
     𝐱_next, 𝐏_next, 𝐲̃, 𝐒
 end
 

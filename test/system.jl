@@ -1,5 +1,3 @@
-srand(1234)
-
 @testset "Kalman Filter System Test" begin
     start_pt = 19
     start_vel = 2
@@ -42,8 +40,8 @@ srand(1234)
     counter = 1
     𝐱_init = [0.0 0.0 0.0]'
     𝐏_init = [2.5 0.25 0.1; 0.25 2.5 0.2; 0.1 0.2 2.5]
-    𝐲̃_over_time = Vector(length(range))
-    𝐒_over_time = Vector{Matrix{Float64}}(length(range))
+    𝐲̃_over_time = Vector(undef, length(range))
+    𝐒_over_time = Vector{Matrix{Float64}}(undef, length(range))
     time_update = KalmanFilter.init_kalman(𝐱_init, 𝐏_init)
 
     # run Kalman Filter
