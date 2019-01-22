@@ -9,7 +9,7 @@ Calculate Sigma Points.
 `scales` is of type ScalingParameters.
 """
 function calc_sigma_points(𝐱, 𝐏, scales)
-    𝐏_chol = sqrt(length(𝐱) + λ(scales, length(𝐱))) * (cholesky(Symmetric(𝐏))).U'
+    𝐏_chol = sqrt(length(𝐱) + λ(scales, length(𝐱))) * (cholesky(Symmetric(𝐏))).L
     [𝐱 𝐱 .+ 𝐏_chol 𝐱 .- 𝐏_chol]
 end
 
@@ -23,7 +23,8 @@ function _time_update(χ, scales, 𝐟::Function, 𝐐)
     num_states = size(χ, 1)
     χ_next = mapreduce(𝐟, hcat, julienne(χ, (:, *)))::Array{Float64, 2} # mapslices(𝐟, χ, 1)
     𝐱_next = χ_next * mean_weights(scales, num_states)
-    𝐏_next = (χ_next .- 𝐱_next) .* cov_weights(scales, num_states)' * (χ_next .- 𝐱_next)' .+ 𝐐
+    χ_diff = χ_next .- 𝐱_next
+    𝐏_next = χ_diff .* cov_weights(scales, num_states)' * χ_diff' .+ 𝐐
     χ_next, 𝐱_next, 𝐏_next
 end
 
@@ -39,11 +40,12 @@ function _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, 𝐡::Function, 𝐑)
     num_aug_states = floor(Int, size(χ, 2) / 2)
     𝐲̂ = 𝓨 * mean_weights(scales, num_aug_states)
     𝐲̃ = 𝐲 .- 𝐲̂ # Innovation
-    𝐏yy = (𝓨 .- 𝐲̂) .* cov_weights(scales, num_aug_states)' * (𝓨 .- 𝐲̂)' .+ 𝐑 # Innovation covariance
-    𝐏xy = (χ[1:length(𝐱),:] .- 𝐱) .* cov_weights(scales, num_aug_states)' * (𝓨 .- 𝐲̂)' # Cross covariance
+    𝓨_diff = 𝓨 .- 𝐲̂
+    𝐏yy = 𝓨_diff .* cov_weights(scales, num_aug_states)' * 𝓨_diff' .+ 𝐑 # Innovation covariance
+    𝐏xy = (χ[1:length(𝐱),:] .- 𝐱) .* cov_weights(scales, num_aug_states)' * 𝓨_diff' # Cross covariance
     𝐊 = 𝐏xy / 𝐏yy # Kalman gain
-    𝐱_next = 𝐱 + 𝐊 * 𝐲̃
-    𝐏_next = 𝐏 - 𝐊 * 𝐏yy * 𝐊'
+    𝐱_next = 𝐱 .+ 𝐊 * 𝐲̃
+    𝐏_next = 𝐏 .- 𝐊 * 𝐏yy * 𝐊'
     𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
@@ -103,7 +105,7 @@ the innovation and the innovation covariance.
 function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, χ, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, h::Function, used_states, reset_unused_states)
     part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, h, 0)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(length(𝐱))) ->
+    (𝐅, 𝐐, 𝐑, used_states = 1:length(𝐱)) ->
         time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, 𝐑, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
@@ -119,7 +121,7 @@ the innovation and the innovation covariance.
 function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, χ, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, h::Function, 𝐑, used_states, reset_unused_states)
     part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, h, 𝐑)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) ->
+    (𝐅, 𝐐, used_states = 1:length(𝐱)) ->
         time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
@@ -135,7 +137,7 @@ the innovation and the innovation covariance.
 function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, χ, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, 𝐇, used_states, reset_unused_states)
     part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 0)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(length(𝐱))) ->
+    (𝐅, 𝐐, 𝐑, used_states = 1:length(𝐱)) ->
         time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, 𝐑, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
@@ -151,7 +153,7 @@ the innovation and the innovation covariance.
 function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, χ, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
     part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 𝐑)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) ->
+    (𝐅, 𝐐, used_states = 1:length(𝐱)) ->
         time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
@@ -168,7 +170,7 @@ function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, χ, 𝐱
     𝐱ᵃ, 𝐏ᵃ = augment(𝐱, 𝐏, 𝐑)
     part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱ᵃ, 𝐏ᵃ, 𝐲, 𝐇, 0)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) ->
+    (𝐅, 𝐐, used_states = 1:length(𝐱)) ->
         time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
@@ -185,7 +187,7 @@ function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, �
     χ = calc_sigma_points(𝐱, 𝐏, scales)
     part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, h, 0)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(length(𝐱))) ->
+    (𝐅, 𝐐, 𝐑, used_states = 1:length(𝐱)) ->
         time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, 𝐑, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
@@ -202,7 +204,7 @@ function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, �
     χ = calc_sigma_points(𝐱, 𝐏, scales)
     part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, h::Function, 𝐑)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) ->
+    (𝐅, 𝐐, used_states = 1:length(𝐱)) ->
         time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end
 
@@ -220,6 +222,6 @@ function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, �
     χ = calc_sigma_points(𝐱ᵃ, 𝐏ᵃ, scales)
     part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(χ, 𝐱, 𝐏, scales, 𝐲, h, 0)
     𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, used_states::BitArray{1} = trues(length(𝐱))) ->
+    (𝐅, 𝐐, used_states = 1:length(𝐱)) ->
         time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
 end

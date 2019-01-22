@@ -56,9 +56,9 @@ module KalmanFilter
         num_states = length(𝐱)
         𝐱_init = copy(𝐱)
         𝐏_init = copy(𝐏)
-        rtn_time_update(𝐟_or_𝐅, 𝐐, used_states::BitArray{1} = trues(num_states)) =
+        rtn_time_update(𝐟_or_𝐅, 𝐐, used_states = 1:num_states) =
             time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐅, 𝐐, used_states, reset_unused_states)
-        rtn_time_update(𝐟_or_𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(num_states)) =
+        rtn_time_update(𝐟_or_𝐅, 𝐐, 𝐑::Matrix, used_states = 1:num_states) =
             time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐅, 𝐐, 𝐑, used_states, reset_unused_states)
         rtn_time_update
     end
@@ -80,7 +80,7 @@ module KalmanFilter
     Updates the previous states with the filtered updated states.
     """
     function expand_states(part_𝐱, part_𝐏, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-        num_used_states = sum(used_states)
+        num_used_states = length(used_states)
         𝐱 = reset_unused_states ? copy(𝐱_init) : copy(𝐱_prev)
         𝐱[used_states] = part_𝐱[1:num_used_states]
         𝐏 = reset_unused_states ? copy(𝐏_init) : copy(𝐏_prev)
