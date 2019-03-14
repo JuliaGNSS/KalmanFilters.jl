@@ -28,6 +28,7 @@ module KalmanFilter
 
     abstract type AbstractTimeUpdate end
     abstract type AbstractMeasurementUpdate end
+    abstract type AbstractWeightingParameters end
 
     state(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate, <: KalmanInits}) = kf.state
     covariance(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate, <: KalmanInits}) = kf.covariance
@@ -37,8 +38,8 @@ module KalmanFilter
 
     include("kf.jl")
     include("sigmapoints.jl")
-    include("aukf.jl")
     include("ukf.jl")
+    include("aukf.jl")
     include("tests.jl")
 
 end

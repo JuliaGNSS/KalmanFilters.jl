@@ -1,8 +1,3 @@
-struct Augment{A <: AbstractArray{T, 2} where T}
-    P::A
-    noise::A
-end
-
 function calc_weighted_lower_triangle_cholesky(mat::Augment, weight_params::AbstractWeightingParameters)
     weight = calc_cholesky_weight(size(mat, 1), weight_params)
     Augment(cholesky(mat.P).L .* weight, cholesky(mat.noise).L .* weight)

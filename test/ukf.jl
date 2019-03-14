@@ -23,5 +23,6 @@
     @test KalmanFilter.calc_cholesky_weight(weight_params, num_states) == 0.5
 end
 
-@testset "Weights" begin
+@testset "Weighting" begin
+    #weighted_mean(χ, weight_params)
 end

@@ -1,4 +1,7 @@
-abstract type AbstractWeightingParameters end
+struct Augment{A <: AbstractArray{T, 2} where T}
+    P::A
+    noise::A
+end
 
 struct WanMerveWeightingParameters <: AbstractWeightingParameters
     α::Float64
