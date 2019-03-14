@@ -1,117 +1,191 @@
-"""
-$(SIGNATURES)
-
-KF time update.
-Returns the time updated states and the time updated covariance.
-"""
-function _time_update(𝐱, 𝐏, 𝐅, 𝐐)
-    𝐱_next = 𝐅 * 𝐱
-    𝐏_next = 𝐅 * 𝐏 * 𝐅' .+ 𝐐
-    𝐱_next, 𝐏_next
+struct KFTimeUpdate{X,P} <: AbstractTimeUpdate
+    state::X
+    covariance::P
 end
 
-"""
-$(SIGNATURES)
-
-UKF measurement update.
-Returns the measurement updated states, the measurement updated covariance,
-the innovation and the innovation covariance.
-"""
-function _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 𝐑)
-    𝐲̃ = 𝐲 .- 𝐇 * 𝐱
-    𝐒 = 𝐇 * 𝐏 * 𝐇' .+ 𝐑
-    𝐊 = 𝐏 * 𝐇' / 𝐒
-    𝐱_next = 𝐱 .+ 𝐊 * 𝐲̃
-    𝐏_next = 𝐏 .- 𝐊 * 𝐒 * 𝐊'
-    𝐱_next, 𝐏_next, 𝐲̃, 𝐒
+struct KFTUIntermediate{T}
+    state_temp::Vector{T}
+    fp::Matrix{T}
 end
 
-"""
-$(SIGNATURES)
+KFTUIntermediate(T::Type, num_x::Number) =
+    KFTUIntermediate(
+        Vector{T}(undef, num_x),
+        Matrix{T}(undef, num_x, num_x)
+    )
 
-KF time update.
-The transition noise covariance `𝐐` is NOT augmented.
-Returns a measurement update function.
-"""
-function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐅, 𝐐, used_states, reset_unused_states)
-    part_𝐱, part_𝐏 = filter_states(𝐱, 𝐏, used_states)
-    𝐱_next, 𝐏_next = _time_update(part_𝐱, part_𝐏, 𝐅, 𝐐)
-    (𝐲, 𝐇, 𝐑) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, 𝐱_next, 𝐏_next, scales, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
+KFTUIntermediate(num_x::Number) = KFTUIntermediate(Float64, num_x)
+
+struct KFMeasurementUpdate{X,P,R,S,K} <: AbstractMeasurementUpdate
+    state::X
+    covariance::P
+    innovation::R
+    innovation_covariance::S
+    kalman_gain::K
 end
 
-"""
-$(SIGNATURES)
-
-KF time update.
-The transition noise covariance `𝐐` is augmented.
-Returns a measurement update function.
-"""
-function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐅, 𝐐::Augment, used_states, reset_unused_states)
-    part_𝐱, part_𝐏 = filter_states(𝐱, 𝐏, used_states)
-    part_𝐱ᵃ, part_𝐏ᵃ = augment(part_𝐱, part_𝐏, 𝐐)
-    𝐱_next, 𝐏_next = _time_update(part_𝐱ᵃ, part_𝐏ᵃ, 𝐅, 0)
-    (𝐲, 𝐇, 𝐑) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, 𝐱_next, 𝐏_next, scales, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
+struct KFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
+    innovation::Vector{T}
+    innovation_covariance::Matrix{T}
+    kalman_gain::K
+    pht::K
+    s_lu::Matrix{T}
 end
 
-"""
-$(SIGNATURES)
-
-KF time update.
-The transition noise covariance `𝐐` and the measurement noise covariance `𝐑` are augmented.
-Returns a measurement update function.
-"""
-function time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales::ScalingParameters, 𝐅, 𝐐::Augment, 𝐑::Augment, used_states, reset_unused_states)
-    part_𝐱, part_𝐏 = filter_states(𝐱, 𝐏, used_states)
-    part_𝐱ᵃ, part_𝐏ᵃ = augment(part_𝐱, part_𝐏, 𝐐, 𝐑)
-    𝐱_next, 𝐏_next = _time_update(part_𝐱ᵃ, part_𝐏ᵃ, 𝐅, 0)
-    (𝐲, 𝐇) -> measurement_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, 𝐱_next, 𝐏_next, scales, 𝐲, 𝐇, used_states, reset_unused_states)
+function KFMUIntermediate(T::Type, num_x::Number, num_y::Number)
+    if num_y == 1
+        return KFMUIntermediate(
+            Vector{T}(undef, num_y),
+            Matrix{T}(undef, num_y, num_y),
+            Vector{T}(undef, num_x),
+            Vector{T}(undef, num_x),
+            Matrix{T}(undef, num_y, num_y)
+        )
+    elseif num_x == 1
+        return KFMUIntermediate(
+            Vector{T}(undef, num_y),
+            Matrix{T}(undef, num_y, num_y),
+            adjoint(Vector{T}(undef, num_y)),
+            adjoint(Vector{T}(undef, num_y)),
+            Matrix{T}(undef, num_y, num_y)
+        )
+    else
+        return KFMUIntermediate(
+            Vector{T}(undef, num_y),
+            Matrix{T}(undef, num_y, num_y),
+            Matrix{T}(undef, num_x, num_y),
+            Matrix{T}(undef, num_x, num_y),
+            Matrix{T}(undef, num_y, num_y)
+        )
+    end
 end
 
-"""
-$(SIGNATURES)
+KFMUIntermediate(num_x::Number, num_y::Number) = KFMUIntermediate(Float64, num_x, num_y)
 
-KF measurement update.
-The time update was of type KF.
-The measurement noise covariance `𝐑` is already augmented in the time update.
-Returns a time update function, the measurement updated states, the measurement updated covariance,
-the innovation and the innovation covariance.
-"""
-function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, 𝐇, used_states, reset_unused_states)
-    part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 0)
-    𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, 𝐑, used_states = 1:length(𝐱)) ->
-        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, 𝐑, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
+function time_update(mu::T, F, Q) where T <: Union{KalmanInits, <:AbstractMeasurementUpdate}
+    x, P = state(mu), covariance(mu)
+    x_apri = F * x
+    P_apri = F * P * F' .+ Q
+    KFTimeUpdate(x_apri, P_apri)
 end
 
-"""
-$(SIGNATURES)
-
-KF measurement update.
-The time update was of type KF.
-The measurement noise covariance `𝐑` is NOT augmented.
-Returns a time update function, the measurement updated states, the measurement updated covariance,
-the innovation and the innovation covariance.
-"""
-function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, 𝐇, 𝐑, used_states, reset_unused_states)
-    part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱, 𝐏, 𝐲, 𝐇, 𝐑)
-    𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, used_states = 1:length(𝐱)) ->
-        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
+function time_update!(tu::KFTUIntermediate, mu::T, F, Q) where T <: Union{KalmanInits, <:AbstractMeasurementUpdate}
+    x, P = state(mu), covariance(mu)
+    x_apri = calc_apriori_state!(tu.state_temp, x, F)
+    P_apri = calc_apriori_covariance!(tu.fp, P, F, Q)
+    KFTimeUpdate(x_apri, P_apri)
 end
 
-"""
-$(SIGNATURES)
+function measurement_update(y, tu::T, H, R) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
+    x, P = state(tu), covariance(tu)
+    ỹ = y .- H * x
+    PHᵀ = P * H'
+    S = H * PHᵀ .+ R
+    K = PHᵀ / S
+    x_post = x .+ K * ỹ
+    P_post = P - PHᵀ * K' # (I - K * H) * P ?
+    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+end
 
-KF measurement update.
-The time update was of type KF.
-The measurement noise covariance `𝐑` is augmented.
-Returns a time update function, the measurement updated states, the measurement updated covariance,
-the innovation and the innovation covariance.
-"""
-function measurement_update(𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, 𝐱, 𝐏, scales::ScalingParameters, 𝐲, 𝐇, 𝐑::Augment, used_states, reset_unused_states)
-    𝐱ᵃ, 𝐏ᵃ = augment(𝐱, 𝐏, 𝐑)
-    part_𝐱_next, part_𝐏_next, 𝐲̃, 𝐏yy = _measurement_update(𝐱ᵃ, 𝐏ᵃ, 𝐲, 𝐇, 0)
-    𝐱_next, 𝐏_next = expand_states(part_𝐱_next, part_𝐏_next, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-    (𝐅, 𝐐, used_states = 1:length(𝐱)) ->
-        time_update(𝐱_init, 𝐏_init, 𝐱_next, 𝐏_next, scales, 𝐅, 𝐐, used_states, reset_unused_states), 𝐱_next, 𝐏_next, 𝐲̃, 𝐏yy
+function measurement_update!(mu::KFMUIntermediate, y, tu::T, H, R) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
+    x, P = state(tu), covariance(tu)
+    PHᵀ = mu.pht
+    ỹ = calc_innovation!(mu.innovation, H, x, y)
+    mul!(PHᵀ, P, H')
+    S = calc_innovation_covariance!(mu.innovation_covariance, H, PHᵀ, R)
+    K = calc_kalman_gain!(mu.s_lu, mu.kalman_gain, PHᵀ, S)
+    x_post = calc_posterior_state!(x, K, ỹ)
+    P_post = calc_posterior_covariance!(P, PHᵀ, K)
+    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+end
+
+function calc_apriori_state!(x_temp, x, F)
+    mul!(x_temp, F, x)
+end
+
+function calc_apriori_covariance!(FP, P, F, Q)
+    mul!(FP, F, P)
+    P .= Mul(FP, F') .+ Q
+end
+
+function calc_innovation!(ỹ, H, x::AbstractVector, y::AbstractVector)
+    ỹ .= (-1.) .* Mul(H, x) .+ y # Order is important to trigger BLAS
+end
+
+function calc_innovation!(ỹ, H, x::AbstractVector, y)
+    y - H * x
+end
+
+function calc_innovation!(ỹ, H, x, y::AbstractVector)
+    ỹ .= y .- H .* x
+end
+
+function calc_innovation_covariance!(S, H, PHᵀ, R::AbstractMatrix)
+    S .= Mul(H, PHᵀ) .+ R
+end
+
+# Can be removed once https://github.com/JuliaArrays/LazyArrays.jl/issues/27 is fixed
+function calc_innovation_covariance!(S, H::AbstractVector, PHᵀ, R::AbstractMatrix)
+    mul!(S, H, PHᵀ)
+    S .+= R
+end
+
+function calc_innovation_covariance!(S, H, PHᵀ, R)
+    H * PHᵀ + R
+end
+
+function calc_kalman_gain!(S_lu, K, PHᵀ, S::AbstractMatrix)
+    S_lu .= S
+    K .= PHᵀ
+    rdiv!(K, S_lu)
+end
+
+function calc_kalman_gain!(S_lu, K, PHᵀ, S)
+    PHᵀ ./ S
+end
+
+function calc_posterior_state!(x::AbstractVector, K, ỹ::AbstractVector)
+    x .= Mul(K, ỹ) .+ x
+end
+
+function calc_posterior_state!(x::AbstractVector, K, ỹ)
+    x .= K .* ỹ .+ x
+end
+
+function calc_posterior_state!(x, K, ỹ::AbstractVector)
+    K * ỹ + x
+end
+
+function calc_posterior_covariance!(P::AbstractMatrix, PHᵀ, K)
+    P .= (-1.) .* Mul(PHᵀ, K') .+ P
+end
+
+# Can be removed once https://github.com/JuliaArrays/LazyArrays.jl/issues/27 is fixed
+function calc_posterior_covariance!(P::AbstractMatrix, PHᵀ::AbstractVector, K)
+    P .-= PHᵀ * K'
+end
+
+function calc_posterior_covariance!(P, PHᵀ, K)
+    P - PHᵀ * K'
+end
+
+function adjoint!(X)
+    for i = 1:size(X,1), j = i:size(X,2)
+        @inbounds X[i,j], X[j,i] = X[j,i]', X[i,j]'
+    end
+    return X
+end
+
+function rdiv!(A::StridedVecOrMat, B::StridedMatrix)
+    adjoint(ldiv!(adjoint(lu!(B)), adjoint!(A)))
+end
+
+function rdiv!(adjA::Adjoint{<:Any, <:StridedVecOrMat}, B::StridedMatrix)
+    A = adjA.parent
+    adjoint(ldiv!(adjoint(lu!(B)), A))
+end
+
+function rdiv!(transA::Transpose{<:Any, <:StridedVecOrMat}, B::StridedMatrix)
+    A = transA.parent
+    adjoint(ldiv!(adjoint(lu!(B)), A))
 end
