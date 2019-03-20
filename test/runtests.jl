@@ -4,5 +4,6 @@ Random.seed!(1234)
 
 include("ukf.jl")
 include("kf.jl")
-#include("tests.jl")
-#include("system.jl")
+include("aukf.jl")
+include("tests.jl")
+include("system.jl")

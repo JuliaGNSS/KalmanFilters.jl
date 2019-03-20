@@ -1,16 +1,19 @@
 module KalmanFilter
 
-    using DocStringExtensions, JuliennedArrays, Distributions, LinearAlgebra, LazyArrays
+    using DocStringExtensions, Distributions, LinearAlgebra, LazyArrays, Statistics
+    import Statistics: mean, cov
 
     export
-        WanMerveWeightingParameters,
+        WanMerweWeightingParameters,
         MeanSetWeightingParameters,
         GaussSetWeightingParameters,
         ScaledSetWeightingParameters,
         Augment,
         KalmanInits,
         KFTUIntermediate,
+        UKFTUIntermediate,
         KFMUIntermediate,
+        UKFMUIntermediate,
         state,
         covariance,
         innovation,
@@ -19,7 +22,13 @@ module KalmanFilter
         time_update,
         time_update!,
         measurement_update,
-        measurement_update!
+        measurement_update!,
+        nis,
+        nis_test,
+        sigma_bound_test,
+        two_sigma_bound_test
+
+
 
     struct KalmanInits{X,P}
         state::X

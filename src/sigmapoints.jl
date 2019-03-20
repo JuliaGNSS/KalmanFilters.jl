@@ -1,4 +1,6 @@
-struct SigmaPoints{T} <: AbstractMatrix{T}
+abstract type AbstractSigmaPoints{T} <: AbstractMatrix{T} end
+
+struct SigmaPoints{T} <: AbstractSigmaPoints{T}
     x0::Array{T, 1}
     xi_P_plus::Array{T, 2}
     xi_P_minus::Array{T, 2}
@@ -8,7 +10,7 @@ struct SigmaPoints{T} <: AbstractMatrix{T}
         error("The length of the first dimension must be the same for all inputs")
 end
 
-struct AugmentedSigmaPoints{T} <: AbstractMatrix{T}
+struct AugmentedSigmaPoints{T} <: AbstractSigmaPoints{T}
     x0::Array{T, 1}
     xi_P_plus::Array{T, 2}
     xi_noise_plus::Array{T, 2}
@@ -20,10 +22,19 @@ struct AugmentedSigmaPoints{T} <: AbstractMatrix{T}
         error("The length of the first dimension must be the same for all inputs")
 end
 
-struct PseudoSigmaPoints{T} <: AbstractMatrix{T}
+struct PseudoSigmaPoints{T} <: AbstractSigmaPoints{T}
     xi_P_plus::LowerTriangular{T}
     xi_P_minus::LowerTriangular{T}
     PseudoSigmaPoints{T}(xi_P_plus, xi_P_minus) where {T<:Real} =
+        size(xi_P_plus, 1) == size(xi_P_minus, 1) ?
+        new(xi_P_plus, xi_P_minus) :
+        error("The length of the first dimension must be the same for all inputs")
+end
+
+struct AugmentedPseudoSigmaPoints{T} <: AbstractSigmaPoints{T}
+    xi_P_plus::LowerTriangular{T}
+    xi_P_minus::LowerTriangular{T}
+    AugmentedPseudoSigmaPoints{T}(xi_P_plus, xi_P_minus) where {T<:Real} =
         size(xi_P_plus, 1) == size(xi_P_minus, 1) ?
         new(xi_P_plus, xi_P_minus) :
         error("The length of the first dimension must be the same for all inputs")
@@ -33,16 +44,14 @@ function PseudoSigmaPoints(weighted_P_chol::LowerTriangular{T}) where T
     PseudoSigmaPoints(weighted_P_chol, -weighted_P_chol)
 end
 
-function PseudoSigmaPoints!(χ_diff_x, weighted_P_chol::LowerTriangular{T}) where T
-    χ_diff_x.xi_P_plus[:,:] .= weighted_P_chol
-    χ_diff_x.xi_P_minus[:,:] .= -weighted_P_chol
-    χ_diff_x
+function AugmentedPseudoSigmaPoints(weighted_P_chol)
+    AugmentedPseudoSigmaPoints(weighted_P_chol.P, -weighted_P_chol.P)
 end
 
 Base.size(S::SigmaPoints) = (size(S.xi_P_plus, 1), size(S.xi_P_plus, 2) + size(S.xi_P_minus, 2) + 1)
 
 Base.getindex(S::SigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
-    if inds[2] == 1
+    @inbounds if inds[2] == 1
         S.x0[inds[1]]
     elseif 1 < inds[2] <= size(S.xi_P_plus, 2) + 1
         S.xi_P_plus[inds[1], inds[2] - 1]
@@ -51,10 +60,10 @@ Base.getindex(S::SigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
     end
 
 Base.setindex!(S::SigmaPoints{T}, val, inds::Vararg{Int,2}) where {T} =
-    if inds[2] == 1
+    @inbounds if inds[2] == 1
         S.x0[inds[1]] = val
     elseif 1 < inds[2] <= size(S.xi_P_plus, 2) + 1
-        S.xi_P_plus[inds[1], inds[2] - 1]
+        S.xi_P_plus[inds[1], inds[2] - 1] = val
     else
         S.xi_P_minus[inds[1], inds[2] - size(S.xi_P_plus, 2) - 1] = val
     end
@@ -68,7 +77,7 @@ Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{SigmaPoints}}, ::Typ
 
 function Base.copyto!(dest::SigmaPoints, bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{SigmaPoints}})
     for idx in eachindex(bc)
-        dest[idx] = bc[idx]
+        @inbounds dest[idx] = bc[idx]
     end
     dest
 end
@@ -76,7 +85,7 @@ end
 Base.size(S::AugmentedSigmaPoints) = (size(S.xi_P_plus, 1), size(S.xi_P_plus, 2) + size(S.xi_noise_plus, 2) + size(S.xi_P_minus, 2) + size(S.xi_noise_plus, 2) + 1)
 
 Base.getindex(S::AugmentedSigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
-    if inds[2] == 1
+    @inbounds if inds[2] == 1
         S.x0[inds[1]]
     elseif 1 < inds[2] <= size(S.xi_P_plus, 2) + 1
         S.xi_P_plus[inds[1], inds[2] - 1]
@@ -89,7 +98,7 @@ Base.getindex(S::AugmentedSigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
     end
 
 Base.setindex!(S::AugmentedSigmaPoints{T}, val, inds::Vararg{Int,2}) where {T} =
-    if inds[2] == 1
+    @inbounds if inds[2] == 1
         S.x0[inds[1]] = val
     elseif 1 < inds[2] <= size(S.xi_P_plus, 2) + 1
         S.xi_P_plus[inds[1], inds[2] - 1] = val
@@ -111,7 +120,7 @@ Base.similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{AugmentedSigmaPoints
 
 function Base.copyto!(dest::AugmentedSigmaPoints, bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{AugmentedSigmaPoints}})
     for idx in eachindex(bc)
-        dest[idx] = bc[idx]
+        @inbounds dest[idx] = bc[idx]
     end
     dest
 end
@@ -121,7 +130,7 @@ PseudoSigmaPoints(xi_P_plus::LowerTriangular{T}, xi_P_minus::LowerTriangular{T})
 Base.size(S::PseudoSigmaPoints) = (size(S.xi_P_plus, 1), size(S.xi_P_plus, 2) + size(S.xi_P_minus, 2) + 1)
 
 Base.getindex(S::PseudoSigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
-    if inds[2] == 1
+    @inbounds if inds[2] == 1
         zero(T)
     elseif 1 < inds[2] <= size(S.xi_P_plus, 2) + 1
         S.xi_P_plus[inds[1], inds[2] - 1]
@@ -130,10 +139,41 @@ Base.getindex(S::PseudoSigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
     end
 
 Base.setindex!(S::PseudoSigmaPoints{T}, val, inds::Vararg{Int,2}) where {T} =
-    if inds[2] == 1
+    @inbounds if inds[2] == 1
         error("The first column cannot be set")
     elseif 1 < inds[2] <= size(S.xi_P_plus, 2) + 1
         S.xi_P_plus[inds[1], inds[2] - 1] = val
     else
         S.xi_P_minus[inds[1], inds[2] - size(S.xi_P_plus, 2) - 1] = val
     end
+
+Base.size(S::AugmentedPseudoSigmaPoints) = (size(S.xi_P_plus, 1), 2 * size(S.xi_P_plus, 2) + 2 * size(S.xi_P_minus, 2) + 1)
+
+Base.getindex(S::AugmentedPseudoSigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
+    @inbounds if inds[2] == 1
+        zero(T)
+    elseif 1 < inds[2] <= size(S.xi_P_plus, 2) + 1
+        S.xi_P_plus[inds[1], inds[2] - 1]
+    elseif size(S.xi_P_plus, 2) + 1 < inds[2] <= size(S.xi_P_plus, 2) * 2 + 1
+        zero(T)
+    elseif size(S.xi_P_plus, 2) * 2 + 1 < inds[2] <= size(S.xi_P_plus, 2) * 2 + size(S.xi_P_minus, 2) + 1
+        S.xi_P_minus[inds[1], inds[2] - size(S.xi_P_plus, 2) * 2 - 1]
+    else
+        zero(T)
+    end
+
+Base.setindex!(S::AugmentedPseudoSigmaPoints{T}, val, inds::Vararg{Int,2}) where {T} =
+    @inbounds if inds[2] == 1
+        error("The first column cannot be set")
+    elseif 1 < inds[2] <= size(S.xi_P_plus, 2) + 1
+        S.xi_P_plus[inds[1], inds[2] - 1] = val
+    elseif size(S.xi_P_plus, 2) + 1 < inds[2] <= size(S.xi_P_plus, 2) * 2 + 1
+        error("Noise columns cannot be set")
+    elseif size(S.xi_P_plus, 2) * 2 + 1 < inds[2] <= size(S.xi_P_plus, 2) * 2 + size(S.xi_P_minus, 2) + 1
+        S.xi_P_minus[inds[1], inds[2] - size(S.xi_P_plus, 2) * 2 - 1] = val
+    else
+        error("Noise columns cannot be set")
+    end
+
+AugmentedPseudoSigmaPoints(xi_P_plus::LowerTriangular{T}, xi_P_minus::LowerTriangular{T}) where {T} =
+AugmentedPseudoSigmaPoints{T}(xi_P_plus, xi_P_minus)

@@ -76,7 +76,7 @@ function time_update!(tu::KFTUIntermediate, mu::T, F, Q) where T <: Union{Kalman
     KFTimeUpdate(x_apri, P_apri)
 end
 
-function measurement_update(y, tu::T, H, R) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
+function measurement_update(tu::T, y, H, R) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
     x, P = state(tu), covariance(tu)
     ỹ = y .- H * x
     PHᵀ = P * H'
@@ -87,7 +87,7 @@ function measurement_update(y, tu::T, H, R) where T <: Union{KalmanInits, <:Abst
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
-function measurement_update!(mu::KFMUIntermediate, y, tu::T, H, R) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
+function measurement_update!(mu::KFMUIntermediate, tu::T, y, H, R) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
     x, P = state(tu), covariance(tu)
     PHᵀ = mu.pht
     ỹ = calc_innovation!(mu.innovation, H, x, y)

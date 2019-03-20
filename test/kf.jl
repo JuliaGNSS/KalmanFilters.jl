@@ -152,7 +152,7 @@ end
 
     @testset "Measurement update with $(typeof(inits))" for inits in (initials, mu)
 
-        mu = measurement_update(y, inits, H, R)
+        mu = measurement_update(inits, y, H, R)
         @test state(mu) == [1., 1.]
         @test covariance(mu) == [0.5 0.; 0. 0.5]
         @test innovation(mu) == [0.0, 0.0]
@@ -160,7 +160,7 @@ end
         @test kalman_gain(mu) == [0.5 0.0; 0.0 0.5]
 
         mu_inter = KFMUIntermediate(2,2)
-        mu = measurement_update!(mu_inter, y, inits, H, R)
+        mu = measurement_update!(mu_inter, inits, y, H, R)
         @test state(mu) == [1., 1.]
         @test covariance(mu) == [0.5 0.; 0. 0.5]
         @test innovation(mu) == [0.0, 0.0]
@@ -179,7 +179,7 @@ end
 
     @testset "Measurement update with $(typeof(inits))" for inits in (initials, mu)
 
-        mu = measurement_update(y, inits, H, R)
+        mu = measurement_update(inits, y, H, R)
         @test state(mu) == [1., 1.]
         @test covariance(mu) == [0.5 0.; 0. 1.]
         @test innovation(mu) == 0.
@@ -187,7 +187,7 @@ end
         @test kalman_gain(mu) == [0.5, 0.]
 
         mu_inter = KFMUIntermediate(2,1)
-        mu = measurement_update!(mu_inter, y, inits, H, R)
+        mu = measurement_update!(mu_inter, inits, y, H, R)
         @test state(mu) == [1., 1.]
         @test covariance(mu) == [0.5 0.; 0. 1.]
         @test innovation(mu) == 0.
@@ -206,7 +206,7 @@ end
 
     @testset "Measurement update with $(typeof(inits))" for inits in (initials, mu)
 
-        mu = measurement_update(y, inits, H, R)
+        mu = measurement_update(inits, y, H, R)
         @test state(mu) == 1.
         @test covariance(mu) == 0.5
         @test innovation(mu) == [0.0, 1.0]
@@ -214,7 +214,7 @@ end
         @test kalman_gain(mu) == [0.5 0.0]
 
         mu_inter = KFMUIntermediate(1,2)
-        mu = measurement_update!(mu_inter, y, inits, H, R)
+        mu = measurement_update!(mu_inter, inits, y, H, R)
         @test state(mu) == 1.
         @test covariance(mu) == 0.5
         @test innovation(mu) == [0.0, 1.0]
