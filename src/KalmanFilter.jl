@@ -1,91 +1,50 @@
 module KalmanFilter
 
-    using DocStringExtensions, JuliennedArrays, Distributions
+    using DocStringExtensions, Distributions, LinearAlgebra, LazyArrays, Statistics
+    import Statistics: mean, cov
 
-    struct Augment{T}
-        cov::T
+    export
+        WanMerweWeightingParameters,
+        MeanSetWeightingParameters,
+        GaussSetWeightingParameters,
+        ScaledSetWeightingParameters,
+        Augment,
+        KFTUIntermediate,
+        UKFTUIntermediate,
+        KFMUIntermediate,
+        UKFMUIntermediate,
+        state,
+        covariance,
+        innovation,
+        innovation_covariance,
+        kalman_gain,
+        time_update,
+        time_update!,
+        measurement_update,
+        measurement_update!,
+        nis,
+        nis_test,
+        sigma_bound_test,
+        two_sigma_bound_test
+
+    abstract type AbstractTimeUpdate end
+    abstract type AbstractMeasurementUpdate end
+    abstract type AbstractWeightingParameters end
+
+    state(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate}) = kf.state
+    covariance(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate}) = kf.covariance
+    innovation(kf::AbstractMeasurementUpdate) = kf.innovation
+    innovation_covariance(kf::AbstractMeasurementUpdate) = kf.innovation_covariance
+    kalman_gain(kf::AbstractMeasurementUpdate) = kf.kalman_gain
+
+    @static if VERSION < v"1.1"
+        eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
     end
-
-    struct ScalingParameters
-        α::Float64
-        β::Float64
-        κ::Float64
-    end
-
-    export ScalingParameters, Augment, init_kalman, mean_num_sigma_bound_exceedings, sigma_bound_test, two_sigma_bound_test, nis_test, nis
 
     include("kf.jl")
+    include("sigmapoints.jl")
     include("ukf.jl")
+    include("aukf.jl")
     include("tests.jl")
-
-    """
-    $(SIGNATURES)
-
-    Augment the state and covariance
-    """
-    function augment(𝐱, 𝐏, 𝐑::Augment)
-        𝐱ᵃ = [𝐱; zeros(size(𝐑.cov, 1))]
-        𝐏ᵃ = [𝐏                               zeros(size(𝐏,1),size(𝐑.cov,2));
-              zeros(size(𝐑.cov,1),size(𝐏,2))  𝐑.cov                          ]
-        𝐱ᵃ, 𝐏ᵃ
-    end
-
-    """
-    $(SIGNATURES)
-
-    Augment the state and covariance twice
-    """
-    function augment(𝐱, 𝐏, 𝐐, 𝐑)
-        augment(augment(𝐱, 𝐏, 𝐐)..., 𝐑)
-    end
-
-    """
-    $(SIGNATURES)
-
-    Initialize Kalman Filter.
-    `𝐱` is the initial state, `𝐏` is the initial covariance, `scales` is optional and holds the scaling
-    parameters for the UKF and `reset_unused_states` is optional and declares if unused states should be
-    resetted to the initals.
-    Returns the time update function. The time update function depends on the transition noise covariance
-    matrix `𝐐`, which can be augmented by `Augment(𝐐)`, optionally on the measurement noise covariance
-    matrix `Augment(𝐑)`, only if augmented, optionally on the used states `used_states` and on the
-    transition, which can be of type scalar, Matrix or Function. In the latter case the transition is
-    assumed to be non-linear and the Unscented Kalman Filter (UKF) is used instead of the Kalman Filter (KF).
-    """
-    function init_kalman(𝐱, 𝐏, scales = ScalingParameters(1e-3, 2, 0), reset_unused_states = true)
-        num_states = length(𝐱)
-        𝐱_init = copy(𝐱)
-        𝐏_init = copy(𝐏)
-        rtn_time_update(𝐟_or_𝐅, 𝐐, used_states::BitArray{1} = trues(num_states)) =
-            time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐅, 𝐐, used_states, reset_unused_states)
-        rtn_time_update(𝐟_or_𝐅, 𝐐, 𝐑, used_states::BitArray{1} = trues(num_states)) =
-            time_update(𝐱_init, 𝐏_init, 𝐱, 𝐏, scales, 𝐟_or_𝐅, 𝐐, 𝐑, used_states, reset_unused_states)
-        rtn_time_update
-    end
-
-    """
-    $(SIGNATURES)
-
-    Filter the state and the covariance based on the current used states.
-    """
-    function filter_states(𝐱, 𝐏, used_states)
-        part_𝐱 = 𝐱[used_states]
-        part_𝐏 = 𝐏[used_states, used_states]
-        part_𝐱, part_𝐏
-    end
-
-    """
-    $(SIGNATURES)
-
-    Updates the previous states with the filtered updated states.
-    """
-    function expand_states(part_𝐱, part_𝐏, 𝐱_init, 𝐏_init, 𝐱_prev, 𝐏_prev, used_states, reset_unused_states)
-        num_used_states = sum(used_states)
-        𝐱 = reset_unused_states ? copy(𝐱_init) : copy(𝐱_prev)
-        𝐱[used_states] = part_𝐱[1:num_used_states]
-        𝐏 = reset_unused_states ? copy(𝐏_init) : copy(𝐏_prev)
-        𝐏[used_states, used_states] = part_𝐏[1:num_used_states, 1:num_used_states]
-        𝐱, 𝐏
-    end
 
 end

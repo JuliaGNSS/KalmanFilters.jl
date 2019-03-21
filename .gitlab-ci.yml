@@ -1,12 +1,11 @@
-image: julia:0.6
+image: julia:1.0
 
 before_script:
   - apt-get update && apt-get -y install make g++
-  - julia -e 'Pkg.clone(pwd())'
+  - julia -e "using Pkg; Pkg.develop(PackageSpec(url=pwd()))"
 
 testjob:
   script:
-    - julia -e 'Pkg.test("KalmanFilter", coverage=true)'
-    - julia -e 'Pkg.add("Coverage"); cd(Pkg.dir("KalmanFilter"));
+    - julia -e 'using Pkg; Pkg.add("Coverage"); Pkg.test("KalmanFilter", coverage=true);
       using Coverage; cl, tl = get_summary(process_folder());
       println("(", cl/tl*100, "%) covered")'
