@@ -37,6 +37,10 @@ module KalmanFilter
     innovation_covariance(kf::AbstractMeasurementUpdate) = kf.innovation_covariance
     kalman_gain(kf::AbstractMeasurementUpdate) = kf.kalman_gain
 
+    @static if VERSION < v"1.1"
+        eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
+    end
+
     include("kf.jl")
     include("sigmapoints.jl")
     include("ukf.jl")
