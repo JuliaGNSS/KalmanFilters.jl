@@ -1,4 +1,4 @@
-image: julia:1.0
+image: julia:1.1
 
 before_script:
   - apt-get update && apt-get -y install make g++

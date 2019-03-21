@@ -1,3 +1,29 @@
+UKFTUIntermediate(T::Type, num_x::Number, augment) =
+    UKFTUIntermediate(
+        Augmented(LowerTriangular(Matrix{T}(undef, num_x, num_x)), LowerTriangular(Matrix{T}(undef, num_x, num_x))),
+        AugmentedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x)),
+        AugmentedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x))
+    )
+
+UKFTUIntermediate(num_x::Number, augment) = UKFTUIntermediate(Float64, num_x, augment)
+
+function UKFMUIntermediate(T::Type, num_x::Number, num_y::Number, augment)
+    UKFMUIntermediate(
+        AugmentedSigmaPoints(Vector{T}(undef, num_y), Matrix{T}(undef, num_y, num_y), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_y)),
+        Vector{T}(undef, num_y),
+        Matrix{T}(undef, num_y, num_y),
+        Matrix{T}(undef, num_x, num_y),
+        Matrix{T}(undef, num_x, num_y),
+        Augmented(LowerTriangular(Matrix{T}(undef, num_x, num_x)), LowerTriangular(Matrix{T}(undef, num_x, num_x))),
+        Vector{T}(undef, num_y),
+        AugmentedPseudoSigmaPoints(Augmented(LowerTriangular(Matrix{T}(undef, num_x, num_x)), LowerTriangular(Matrix{T}(undef, num_x, num_x)))),
+        AugmentedSigmaPoints(Vector{T}(undef, num_y), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_y), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_y)),
+        Matrix{T}(undef, num_y, num_y)
+    )
+end
+
+UKFMUIntermediate(num_x::Number, num_y::Number, augment) = UKFMUIntermediate(Float64, num_x, num_y, augment)
+
 struct Augmented{A <: AbstractArray{T, 2} where T}
     P::A
     noise::A
@@ -24,9 +50,9 @@ end
 function apply_func_to_sigma_points(F, x, weighted_chol::Augmented)
     χ₁ = F(x)
     χ₂ = map(F, eachcol(x .+ weighted_chol.P))
-    χ₃ = map(F, eachcol(x .+ weighted_chol.noise))
+    χ₃ = map(F, x, eachcol(weighted_chol.noise))
     χ₄ = map(F, eachcol(x .- weighted_chol.P))
-    χ₅ = map(F, eachcol(x .- weighted_chol.noise))
+    χ₅ = map(F, x, eachcol(-weighted_chol.noise))
     AugmentedSigmaPoints(χ₁, reduce(hcat, χ₂), reduce(hcat, χ₃), reduce(hcat, χ₄), reduce(hcat, χ₅))
 end
 
@@ -34,8 +60,8 @@ function apply_func_to_sigma_points!(χ, F!, x, weighted_chol::Augmented)
     F!(χ.x0, x)
     foreach(F!, eachcol(χ.xi_P_plus), eachcol(x .+ weighted_chol.P))
     foreach(F!, eachcol(χ.xi_P_minus), eachcol(x .- weighted_chol.P))
-    foreach(F!, eachcol(χ.xi_noise_plus), eachcol(x .+ weighted_chol.noise))
-    foreach(F!, eachcol(χ.xi_noise_minus), eachcol(x .- weighted_chol.noise))
+    foreach(F!, eachcol(χ.xi_noise_plus), x, eachcol(weighted_chol.noise))
+    foreach(F!, eachcol(χ.xi_noise_minus), x, eachcol(-weighted_chol.noise))
     χ
 end
 
@@ -68,11 +94,15 @@ function _cov!(dest, χ_diff_x::AugmentedSigmaPoints, 𝓨_diff_y::AugmentedSigm
         Mul(χ_diff_x.xi_noise_minus, 𝓨_diff_y.xi_noise_minus'))
 end
 
-function cov(χ_diff_x::AugmentedSigmaPoints, noise::Augment, weight_params::AbstractWeightingParameters)
+function cov(χ_diff_x::AugmentedSigmaPoints, noise::Nothing, weight_params::AbstractWeightingParameters)
     cov(χ_diff_x, χ_diff_x, weight_params)
 end
 
-function cov!(P, χ_diff_x::AugmentedSigmaPoints, noise::Augment, weight_params::AbstractWeightingParameters)
+function cov!(P::Augmented, χ_diff_x::AugmentedSigmaPoints, noise::Nothing, weight_params::AbstractWeightingParameters)
+    cov!(P.P, χ_diff_x, χ_diff_x, weight_params)
+end
+
+function cov!(P, χ_diff_x::AugmentedSigmaPoints, noise::Nothing, weight_params::AbstractWeightingParameters)
     cov!(P, χ_diff_x, χ_diff_x, weight_params)
 end
 
@@ -86,18 +116,26 @@ function create_pseudo_sigmapoints!(χ_diff_x, weighted_P_chol::Augmented)
     χ_diff_x
 end
 
-function time_update(mu::T, F::Function, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)) where T <: Union{KalmanInits, <:AbstractMeasurementUpdate}
-    time_update(T(mu, Q), F, Q, weight_params)
+function calc_posterior_covariance(P::Augmented, Pᵪᵧ, K)
+    calc_posterior_covariance(P.P, Pᵪᵧ, K)
 end
 
-function time_update!(tu::UKFTUIntermediate, mu::T, F!::Function, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)) where T <: Union{KalmanInits, <:AbstractMeasurementUpdate}
-    time_update!(tu, T(mu, Q), F!, Q, weight_params)
+function calc_posterior_covariance!(P::Augmented, PHᵀ, K)
+    calc_posterior_covariance!(P.P, PHᵀ, K)
 end
 
-function measurement_update(tu::T, y, H::Function, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
-    measurement_update(mu, T(tu, Q), H, R, weight_params)
+function time_update(x, P, F::Function, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+    time_update(x, Augmented(P, Q.noise), F, nothing, weight_params)
 end
 
-function measurement_update!(mu::UKFMUIntermediate, tu::T, y, H!::Function, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
-    measurement_update!(mu, T(tu, Q), H!, R, weight_params)
+function time_update!(tu::UKFTUIntermediate, x, P, F!::Function, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+    time_update!(tu, x, Augmented(P, Q.noise), F!, nothing, weight_params)
+end
+
+function measurement_update(x, P, y, H::Function, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+    measurement_update(x, Augmented(P, R.noise), y, H, nothing, weight_params)
+end
+
+function measurement_update!(mu::UKFMUIntermediate, x, P, y, H!::Function, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+    measurement_update!(mu, x, Augmented(P, R.noise), y, H!, nothing, weight_params)
 end

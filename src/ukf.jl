@@ -18,16 +18,16 @@ struct ScaledSetWeightingParameters <: AbstractWeightingParameters
     κ::Float64
 end
 
-struct UKFTimeUpdate{X,P,T} <: AbstractTimeUpdate
+struct UKFTimeUpdate{X,P,O} <: AbstractTimeUpdate
     state::X
     covariance::P
-    χ::SigmaPoints{T}
+    χ::O
 end
 
-struct UKFTUIntermediate{T,R}
+struct UKFTUIntermediate{O,R}
     weighted_P_chol::R
-    χ::SigmaPoints{T}
-    χ_diff_x::SigmaPoints{T}
+    χ::O
+    χ_diff_x::O
 end
 
 UKFTUIntermediate(T::Type, num_x::Number) =
@@ -39,25 +39,25 @@ UKFTUIntermediate(T::Type, num_x::Number) =
 
 UKFTUIntermediate(num_x::Number) = UKFTUIntermediate(Float64, num_x)
 
-struct UKFMeasurementUpdate{X,P,T,K} <: AbstractMeasurementUpdate
+struct UKFMeasurementUpdate{X,P,O,T,K} <: AbstractMeasurementUpdate
     state::X
     covariance::P
-    𝓨::SigmaPoints{T}
+    𝓨::O
     innovation::Vector{T}
     innovation_covariance::Matrix{T}
     kalman_gain::K
 end
 
-struct UKFMUIntermediate{T,R}
-    𝓨::SigmaPoints{T}
+struct UKFMUIntermediate{O,T,R,P}
+    𝓨::O
     innovation::Vector{T}
     innovation_covariance::Matrix{T}
     cross_covariance::Matrix{T}
     kalman_gain::Matrix{T}
     weighted_P_chol::R
     estimated_measurement::Vector{T}
-    χ_diff_x::PseudoSigmaPoints{T}
-    𝓨_diff_y::SigmaPoints{T}
+    χ_diff_x::P
+    𝓨_diff_y::O
     s_lu::Matrix{T}
 end
 
@@ -230,8 +230,7 @@ function create_pseudo_sigmapoints!(χ_diff_x, weighted_P_chol)
     χ_diff_x
 end
 
-function time_update(mu::T, F::Function, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)) where T <: Union{KalmanInits, <:AbstractMeasurementUpdate}
-    x, P = state(mu), covariance(mu)
+function time_update(x, P, F::Function, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     weighted_P_chol = calc_lower_triangle_cholesky(P, weight_params)
     χ = apply_func_to_sigma_points(F, x, weighted_P_chol)
     x_apri = mean(χ, weight_params)
@@ -240,8 +239,7 @@ function time_update(mu::T, F::Function, Q, weight_params::AbstractWeightingPara
     UKFTimeUpdate(x_apri, P_apri, χ)
 end
 
-function time_update!(tu::UKFTUIntermediate, mu::T, F!::Function, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)) where T <: Union{KalmanInits, <:AbstractMeasurementUpdate}
-    x, P = state(mu), covariance(mu)
+function time_update!(tu::UKFTUIntermediate, x, P, F!::Function, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     χ_diff_x = tu.χ_diff_x
     weighted_P_chol = calc_lower_triangle_cholesky!(tu.weighted_P_chol, P, weight_params)
     χ = apply_func_to_sigma_points!(tu.χ, F!, x, weighted_P_chol)
@@ -251,8 +249,7 @@ function time_update!(tu::UKFTUIntermediate, mu::T, F!::Function, Q, weight_para
     UKFTimeUpdate(x_apri, P_apri, χ)
 end
 
-function measurement_update(tu::T, y, H::Function, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
-    x, P = state(tu), covariance(tu)
+function measurement_update(x, P, y, H::Function, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     weighted_P_chol = calc_lower_triangle_cholesky(P, weight_params)
     χ_diff_x = create_pseudo_sigmapoints(weighted_P_chol)
     𝓨 = apply_func_to_sigma_points(H, x, weighted_P_chol)
@@ -263,12 +260,11 @@ function measurement_update(tu::T, y, H::Function, R, weight_params::AbstractWei
     Pᵪᵧ = cov(χ_diff_x, 𝓨_diff_y, weight_params)
     K = Pᵪᵧ / S
     x_post = Mul(K, ỹ) .+ x
-    P_post = P .- Pᵪᵧ * K'
+    P_post = calc_posterior_covariance(P, Pᵪᵧ, K)
     UKFMeasurementUpdate(x_post, P_post, 𝓨, ỹ, S, K)
 end
 
-function measurement_update!(mu::UKFMUIntermediate, tu::T, y, H!::Function, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
-    x, P = state(tu), covariance(tu)
+function measurement_update!(mu::UKFMUIntermediate, x, P, y, H!::Function, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     𝓨_diff_y, ỹ = mu.𝓨_diff_y, mu.innovation
     weighted_P_chol = calc_lower_triangle_cholesky!(mu.weighted_P_chol, P, weight_params)
     χ_diff_x = create_pseudo_sigmapoints!(mu.χ_diff_x, weighted_P_chol)

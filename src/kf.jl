@@ -62,33 +62,29 @@ end
 
 KFMUIntermediate(num_x::Number, num_y::Number) = KFMUIntermediate(Float64, num_x, num_y)
 
-function time_update(mu::T, F, Q) where T <: Union{KalmanInits, <:AbstractMeasurementUpdate}
-    x, P = state(mu), covariance(mu)
+function time_update(x, P, F, Q)
     x_apri = F * x
     P_apri = F * P * F' .+ Q
     KFTimeUpdate(x_apri, P_apri)
 end
 
-function time_update!(tu::KFTUIntermediate, mu::T, F, Q) where T <: Union{KalmanInits, <:AbstractMeasurementUpdate}
-    x, P = state(mu), covariance(mu)
+function time_update!(tu::KFTUIntermediate, x, P, F, Q)
     x_apri = calc_apriori_state!(tu.state_temp, x, F)
     P_apri = calc_apriori_covariance!(tu.fp, P, F, Q)
     KFTimeUpdate(x_apri, P_apri)
 end
 
-function measurement_update(tu::T, y, H, R) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
-    x, P = state(tu), covariance(tu)
+function measurement_update(x, P, y, H, R)
     ỹ = y .- H * x
     PHᵀ = P * H'
     S = H * PHᵀ .+ R
     K = PHᵀ / S
     x_post = x .+ K * ỹ
-    P_post = P - PHᵀ * K' # (I - K * H) * P ?
+    P_post = calc_posterior_covariance(P, PHᵀ, K)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
-function measurement_update!(mu::KFMUIntermediate, tu::T, y, H, R) where T <: Union{KalmanInits, <:AbstractTimeUpdate}
-    x, P = state(tu), covariance(tu)
+function measurement_update!(mu::KFMUIntermediate, x, P, y, H, R)
     PHᵀ = mu.pht
     ỹ = calc_innovation!(mu.innovation, H, x, y)
     mul!(PHᵀ, P, H')
@@ -154,6 +150,10 @@ end
 
 function calc_posterior_state!(x, K, ỹ::AbstractVector)
     K * ỹ + x
+end
+
+function calc_posterior_covariance(P, PHᵀ, K)
+    P .- PHᵀ * K' # (I - K * H) * P ?
 end
 
 function calc_posterior_covariance!(P::AbstractMatrix, PHᵀ, K)

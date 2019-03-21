@@ -118,20 +118,16 @@ end
 
     F(x) = x .* [1., 2.]
     F!(x, y) = x .= y .* [1., 2.]
-    initials = KalmanInits(x, P)
-    mu = KalmanFilter.KFMeasurementUpdate(copy(x), copy(P), ones(2,2), ones(2,2), ones(2,2))
 
-    @testset "Time update with $(typeof(inits))" for inits in (initials, mu)
+    tu = time_update(x, P, F, Q)
+    @test state(tu) ≈ [1., 2.]
+    @test covariance(tu) ≈ [2. 0.; 0. 5.]
 
-        tu = time_update(inits, F, Q)
-        @test state(tu) ≈ [1., 2.]
-        @test covariance(tu) ≈ [2. 0.; 0. 5.]
+    tu_inter = UKFTUIntermediate(2)
+    tu = time_update!(tu_inter, x, P, F!, Q)
+    @test state(tu) ≈ [1., 2.]
+    @test covariance(tu) ≈ [2. 0.; 0. 5.]
 
-        tu_inter = UKFTUIntermediate(2)
-        tu = time_update!(tu_inter, inits, F!, Q)
-        @test state(tu) ≈ [1., 2.]
-        @test covariance(tu) ≈ [2. 0.; 0. 5.]
-    end
 end
 
 @testset "KF measurement update" begin
@@ -143,24 +139,19 @@ end
 
     H(x) = x .* [1., 1.]
     H!(x, y) = x .= y .* [1., 1.]
-    initials = KalmanInits(x, P)
-    mu = KalmanFilter.KFTimeUpdate(copy(x), copy(P))
 
-    @testset "Measurement update with $(typeof(inits))" for inits in (initials, mu)
+    mu = measurement_update(x, P, y, H, R)
+    @test state(mu) ≈ [1., 1.]
+    @test covariance(mu) ≈ [0.5 0.; 0. 0.5]
+    @test innovation(mu) ≈ [0.0, 0.0] atol = 1e-10 #?
+    @test innovation_covariance(mu) ≈ [2.0 0.0; 0.0 2.0]
+    @test kalman_gain(mu) ≈ [0.5 0.0; 0.0 0.5]
 
-        mu = measurement_update(inits, y, H, R)
-        @test state(mu) ≈ [1., 1.]
-        @test covariance(mu) ≈ [0.5 0.; 0. 0.5]
-        @test innovation(mu) ≈ [0.0, 0.0] atol = 1e-10 #?
-        @test innovation_covariance(mu) ≈ [2.0 0.0; 0.0 2.0]
-        @test kalman_gain(mu) ≈ [0.5 0.0; 0.0 0.5]
-
-        mu_inter = UKFMUIntermediate(2,2)
-        mu = measurement_update!(mu_inter, inits, y, H!, R)
-        @test state(mu) ≈ [1., 1.]
-        @test covariance(mu) ≈ [0.5 0.; 0. 0.5]
-        @test innovation(mu) ≈ [0.0, 0.0] atol = 1e-10 #?
-        @test innovation_covariance(mu) ≈ [2.0 0.0; 0.0 2.0]
-        @test kalman_gain(mu) ≈ [0.5 0.0; 0.0 0.5]
-    end
+    mu_inter = UKFMUIntermediate(2,2)
+    mu = measurement_update!(mu_inter, x, P, y, H!, R)
+    @test state(mu) ≈ [1., 1.]
+    @test covariance(mu) ≈ [0.5 0.; 0. 0.5]
+    @test innovation(mu) ≈ [0.0, 0.0] atol = 1e-10 #?
+    @test innovation_covariance(mu) ≈ [2.0 0.0; 0.0 2.0]
+    @test kalman_gain(mu) ≈ [0.5 0.0; 0.0 0.5]
 end

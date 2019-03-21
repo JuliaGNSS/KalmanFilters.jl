@@ -9,7 +9,6 @@ module KalmanFilter
         GaussSetWeightingParameters,
         ScaledSetWeightingParameters,
         Augment,
-        KalmanInits,
         KFTUIntermediate,
         UKFTUIntermediate,
         KFMUIntermediate,
@@ -28,19 +27,12 @@ module KalmanFilter
         sigma_bound_test,
         two_sigma_bound_test
 
-
-
-    struct KalmanInits{X,P}
-        state::X
-        covariance::P
-    end
-
     abstract type AbstractTimeUpdate end
     abstract type AbstractMeasurementUpdate end
     abstract type AbstractWeightingParameters end
 
-    state(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate, <: KalmanInits}) = kf.state
-    covariance(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate, <: KalmanInits}) = kf.covariance
+    state(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate}) = kf.state
+    covariance(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate}) = kf.covariance
     innovation(kf::AbstractMeasurementUpdate) = kf.innovation
     innovation_covariance(kf::AbstractMeasurementUpdate) = kf.innovation_covariance
     kalman_gain(kf::AbstractMeasurementUpdate) = kf.kalman_gain

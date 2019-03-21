@@ -27,23 +27,22 @@
     P_init = [2.5 0.25 0.1; 0.25 2.5 0.2; 0.1 0.2 2.5]
     ỹ_over_time = Vector{Float64}(undef, maxiter)
     S_over_time = Vector{Float64}(undef, maxiter)
-    kalman_inits = KalmanInits(x_init, P_init)
     states = (start_pt, start_vel, start_acc)
     s_over_time = Vector{Float64}(undef, maxiter)
     z_over_time = Vector{Float64}(undef, maxiter)
     s̃_over_time = Vector{Float64}(undef, maxiter)
     # run Kalman Filter
-    time_update_results = time_update(kalman_inits, F, Q)
+    tu = time_update(x_init, P_init, F, Q)
     for i = 1:maxiter
         measurement, states = measure(states, Δt, σ_meas_noise, σ_acc_noise)
-        measurement_update_results = measurement_update(time_update_results, measurement, H, R)
-        time_update_results = time_update(measurement_update_results, F, Q)
+        mu = measurement_update(state(tu), covariance(tu), measurement, H, R)
+        tu = time_update(state(mu), covariance(mu), F, Q)
 
-        #s̃_over_time[counter] = state(measurement_update_results)[1]
+        #s̃_over_time[counter] = state(mu)[1]
         #s_over_time[counter] = states[1]
         #z_over_time[counter] = measurement
-        ỹ_over_time[counter] = innovation(measurement_update_results)
-        S_over_time[counter] = innovation_covariance(measurement_update_results)
+        ỹ_over_time[counter] = innovation(mu)
+        S_over_time[counter] = innovation_covariance(mu)
         counter += 1
     end
     #using PyPlot

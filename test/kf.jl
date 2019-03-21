@@ -108,35 +108,25 @@ end
     F = [1. 0.; 0. 2.]
     Q = [1. 0.; 0. 1.]
 
-    initials = KalmanInits(x, P)
-    mu = KalmanFilter.KFMeasurementUpdate(copy(x), copy(P), ones(2,2), ones(2,2), ones(2,2))
 
-    @testset "Time update with $(typeof(inits))" for inits in (initials, mu)
+    tu = time_update(x, P, F, Q)
+    @test state(tu) == [1., 2.]
+    @test covariance(tu) == [2. 0.; 0. 5.]
 
-        tu = time_update(inits, F, Q)
-        @test state(tu) == [1., 2.]
-        @test covariance(tu) == [2. 0.; 0. 5.]
-
-        tu_inter = KFTUIntermediate(2)
-        tu = time_update!(tu_inter, inits, F, Q)
-        @test state(tu) == [1., 2.]
-        @test covariance(tu) == [2. 0.; 0. 5.]
-    end
+    tu_inter = KFTUIntermediate(2)
+    tu = time_update!(tu_inter, x, P, F, Q)
+    @test state(tu) == [1., 2.]
+    @test covariance(tu) == [2. 0.; 0. 5.]
 
     x = 1.
     P = 1.
     F = 1.
     Q = 1.
 
-    initials = KalmanInits(x, P)
-    mu = KalmanFilter.KFMeasurementUpdate(x, P, 0., 0., 0.)
 
-    @testset "Time update with $(typeof(inits))" for inits in (initials, mu)
-
-        tu = time_update(inits, F, Q)
-        @test state(tu) == 1.
-        @test covariance(tu) == 2.
-    end
+    tu = time_update(x, P, F, Q)
+    @test state(tu) == 1.
+    @test covariance(tu) == 2.
 end
 
 @testset "KF measurement update" begin
@@ -147,26 +137,21 @@ end
     H = [1. 0.; 0. 1.]
     R = [1. 0.; 0. 1.]
 
-    initials = KalmanInits(x, P)
-    mu = KalmanFilter.KFTimeUpdate(copy(x), copy(P))
 
-    @testset "Measurement update with $(typeof(inits))" for inits in (initials, mu)
+    mu = measurement_update(x, P, y, H, R)
+    @test state(mu) == [1., 1.]
+    @test covariance(mu) == [0.5 0.; 0. 0.5]
+    @test innovation(mu) == [0.0, 0.0]
+    @test innovation_covariance(mu) == [2.0 0.0; 0.0 2.0]
+    @test kalman_gain(mu) == [0.5 0.0; 0.0 0.5]
 
-        mu = measurement_update(inits, y, H, R)
-        @test state(mu) == [1., 1.]
-        @test covariance(mu) == [0.5 0.; 0. 0.5]
-        @test innovation(mu) == [0.0, 0.0]
-        @test innovation_covariance(mu) == [2.0 0.0; 0.0 2.0]
-        @test kalman_gain(mu) == [0.5 0.0; 0.0 0.5]
-
-        mu_inter = KFMUIntermediate(2,2)
-        mu = measurement_update!(mu_inter, inits, y, H, R)
-        @test state(mu) == [1., 1.]
-        @test covariance(mu) == [0.5 0.; 0. 0.5]
-        @test innovation(mu) == [0.0, 0.0]
-        @test innovation_covariance(mu) == [2.0 0.0; 0.0 2.0]
-        @test kalman_gain(mu) == [0.5 0.0; 0.0 0.5]
-    end
+    mu_inter = KFMUIntermediate(2,2)
+    mu = measurement_update!(mu_inter, x, P, y, H, R)
+    @test state(mu) == [1., 1.]
+    @test covariance(mu) == [0.5 0.; 0. 0.5]
+    @test innovation(mu) == [0.0, 0.0]
+    @test innovation_covariance(mu) == [2.0 0.0; 0.0 2.0]
+    @test kalman_gain(mu) == [0.5 0.0; 0.0 0.5]
 
     y = 1.
     x = [1., 1.]
@@ -174,26 +159,21 @@ end
     H = [1., 0.]'
     R = 1.
 
-    initials = KalmanInits(x, P)
-    mu = KalmanFilter.KFTimeUpdate(copy(x), copy(P))
 
-    @testset "Measurement update with $(typeof(inits))" for inits in (initials, mu)
+    mu = measurement_update(x, P, y, H, R)
+    @test state(mu) == [1., 1.]
+    @test covariance(mu) == [0.5 0.; 0. 1.]
+    @test innovation(mu) == 0.
+    @test innovation_covariance(mu) == 2.
+    @test kalman_gain(mu) == [0.5, 0.]
 
-        mu = measurement_update(inits, y, H, R)
-        @test state(mu) == [1., 1.]
-        @test covariance(mu) == [0.5 0.; 0. 1.]
-        @test innovation(mu) == 0.
-        @test innovation_covariance(mu) == 2.
-        @test kalman_gain(mu) == [0.5, 0.]
-
-        mu_inter = KFMUIntermediate(2,1)
-        mu = measurement_update!(mu_inter, inits, y, H, R)
-        @test state(mu) == [1., 1.]
-        @test covariance(mu) == [0.5 0.; 0. 1.]
-        @test innovation(mu) == 0.
-        @test innovation_covariance(mu) == 2.
-        @test kalman_gain(mu) == [0.5, 0.]
-    end
+    mu_inter = KFMUIntermediate(2,1)
+    mu = measurement_update!(mu_inter, x, P, y, H, R)
+    @test state(mu) == [1., 1.]
+    @test covariance(mu) == [0.5 0.; 0. 1.]
+    @test innovation(mu) == 0.
+    @test innovation_covariance(mu) == 2.
+    @test kalman_gain(mu) == [0.5, 0.]
 
     y = [1., 1.]
     x = 1.
@@ -201,24 +181,18 @@ end
     H = [1., 0.]
     R = [1. 0.; 0. 1.]
 
-    initials = KalmanInits(x, P)
-    mu = KalmanFilter.KFTimeUpdate(x, P)
+    mu = measurement_update(x, P, y, H, R)
+    @test state(mu) == 1.
+    @test covariance(mu) == 0.5
+    @test innovation(mu) == [0.0, 1.0]
+    @test innovation_covariance(mu) == [2.0 0.0; 0.0 1.0]
+    @test kalman_gain(mu) == [0.5 0.0]
 
-    @testset "Measurement update with $(typeof(inits))" for inits in (initials, mu)
-
-        mu = measurement_update(inits, y, H, R)
-        @test state(mu) == 1.
-        @test covariance(mu) == 0.5
-        @test innovation(mu) == [0.0, 1.0]
-        @test innovation_covariance(mu) == [2.0 0.0; 0.0 1.0]
-        @test kalman_gain(mu) == [0.5 0.0]
-
-        mu_inter = KFMUIntermediate(1,2)
-        mu = measurement_update!(mu_inter, inits, y, H, R)
-        @test state(mu) == 1.
-        @test covariance(mu) == 0.5
-        @test innovation(mu) == [0.0, 1.0]
-        @test innovation_covariance(mu) == [2.0 0.0; 0.0 1.0]
-        @test kalman_gain(mu) == [0.5 0.0]
-    end
+    mu_inter = KFMUIntermediate(1,2)
+    mu = measurement_update!(mu_inter, x, P, y, H, R)
+    @test state(mu) == 1.
+    @test covariance(mu) == 0.5
+    @test innovation(mu) == [0.0, 1.0]
+    @test innovation_covariance(mu) == [2.0 0.0; 0.0 1.0]
+    @test kalman_gain(mu) == [0.5 0.0]
 end
