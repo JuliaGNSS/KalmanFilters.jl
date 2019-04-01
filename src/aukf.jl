@@ -35,7 +35,9 @@ end
 
 function calc_lower_triangle_cholesky(mat::Augmented, weight_params::AbstractWeightingParameters)
     weight = calc_cholesky_weight(weight_params, size(mat.P, 1) + size(mat.noise, 1))
-    Augmented(cholesky(mat.P .* weight).L, cholesky(mat.noise .* weight).L)
+    cholP = cholesky(Hermitian(mat.P .* weight)).L
+    cholN = cholesky(mat.noise .* weight).L
+    Augmented(cholP, cholN)
 end
 
 function calc_lower_triangle_cholesky!(dest::Augmented, mat::Augmented, weight_params::AbstractWeightingParameters)
@@ -44,7 +46,9 @@ function calc_lower_triangle_cholesky!(dest::Augmented, mat::Augmented, weight_p
     copyto!(dest.noise.data, mat.noise)
     dest.P.data .*= weight
     dest.noise.data .*= weight
-    Augmented(cholesky!(dest.P.data).L, cholesky!(dest.noise.data).L)
+    cholP = cholesky!(Hermitian(dest.P.data)).L
+    cholN = cholesky!(dest.noise.data).L
+    Augmented(cholP, cholN)
 end
 
 function apply_func_to_sigma_points(F, x, weighted_chol::Augmented)

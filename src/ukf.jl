@@ -196,14 +196,14 @@ end
 
 function calc_lower_triangle_cholesky(mat, weight_params::AbstractWeightingParameters)
     weight = calc_cholesky_weight(weight_params, size(mat, 1))
-    cholesky(mat .* weight).L
+    cholesky(Hermitian(mat .* weight)).L
 end
 
 function calc_lower_triangle_cholesky!(dest, mat, weight_params::AbstractWeightingParameters)
     weight = calc_cholesky_weight(weight_params, size(mat, 1))
     copyto!(dest.data, mat)
     dest.data .*= weight
-    cholesky!(dest.data).L
+    cholesky!(Hermitian(dest.data)).L
 end
 
 function apply_func_to_sigma_points(F, x, weighted_P_chol)
