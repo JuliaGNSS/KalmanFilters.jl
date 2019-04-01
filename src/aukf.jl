@@ -50,9 +50,9 @@ end
 function apply_func_to_sigma_points(F, x, weighted_chol::Augmented)
     χ₁ = F(x)
     χ₂ = map(F, eachcol(x .+ weighted_chol.P))
-    χ₃ = map(F, x, eachcol(weighted_chol.noise))
+    χ₃ = map(noise -> F(x, noise), eachcol(weighted_chol.noise))
     χ₄ = map(F, eachcol(x .- weighted_chol.P))
-    χ₅ = map(F, x, eachcol(-weighted_chol.noise))
+    χ₅ = map(noise -> F(x, noise), eachcol(-weighted_chol.noise))
     AugmentedSigmaPoints(χ₁, reduce(hcat, χ₂), reduce(hcat, χ₃), reduce(hcat, χ₄), reduce(hcat, χ₅))
 end
 
@@ -60,8 +60,8 @@ function apply_func_to_sigma_points!(χ, F!, x, weighted_chol::Augmented)
     F!(χ.x0, x)
     foreach(F!, eachcol(χ.xi_P_plus), eachcol(x .+ weighted_chol.P))
     foreach(F!, eachcol(χ.xi_P_minus), eachcol(x .- weighted_chol.P))
-    foreach(F!, eachcol(χ.xi_noise_plus), x, eachcol(weighted_chol.noise))
-    foreach(F!, eachcol(χ.xi_noise_minus), x, eachcol(-weighted_chol.noise))
+    foreach((y, noise) -> F!(y, x, noise), eachcol(χ.xi_noise_plus), eachcol(weighted_chol.noise))
+    foreach((y, noise) -> F!(y, x, noise), eachcol(χ.xi_noise_minus), eachcol(-weighted_chol.noise))
     χ
 end
 
