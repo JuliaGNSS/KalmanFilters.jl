@@ -78,13 +78,13 @@ function _mean!(x, χ::AugmentedSigmaPoints, weight_i)
 end
 
 function cov(χ_diff_x::AugmentedPseudoSigmaPoints, 𝓨_diff_y::AbstractSigmaPoints, weight_params::AbstractWeightingParameters)
-    weight_0, weight_i = calc_cov_weights(weight_params, (size(χ_diff_x, 2) - 1) >> 1)
+    weight_0, weight_i = calc_cov_weights(weight_params, (size(𝓨_diff_y, 2) - 1) >> 1)
     weight_i .* (χ_diff_x.xi_P_plus * 𝓨_diff_y.xi_P_plus' .+
         χ_diff_x.xi_P_minus * 𝓨_diff_y.xi_P_minus')
 end
 
 function cov!(dest, χ_diff_x::AugmentedPseudoSigmaPoints, 𝓨_diff_y::AbstractSigmaPoints, weight_params::AbstractWeightingParameters)
-    weight_0, weight_i = calc_cov_weights(weight_params, (size(χ_diff_x, 2) - 1) >> 1)
+    weight_0, weight_i = calc_cov_weights(weight_params, (size(𝓨_diff_y, 2) - 1) >> 1)
     dest .= weight_i .* (Mul(χ_diff_x.xi_P_plus, 𝓨_diff_y.xi_P_plus') .+
         Mul(χ_diff_x.xi_P_minus, 𝓨_diff_y.xi_P_minus'))
     dest
