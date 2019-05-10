@@ -85,17 +85,17 @@ end
 
 function cov!(dest, χ_diff_x::AugmentedPseudoSigmaPoints, 𝓨_diff_y::AbstractSigmaPoints, weight_params::AbstractWeightingParameters)
     weight_0, weight_i = calc_cov_weights(weight_params, (size(𝓨_diff_y, 2) - 1) >> 1)
-    dest .= weight_i .* (Mul(χ_diff_x.xi_P_plus, 𝓨_diff_y.xi_P_plus') .+
-        Mul(χ_diff_x.xi_P_minus, 𝓨_diff_y.xi_P_minus'))
-    dest
+    dest .= weight_i .* (χ_diff_x.xi_P_plus * 𝓨_diff_y.xi_P_plus' .+
+        χ_diff_x.xi_P_minus * 𝓨_diff_y.xi_P_minus')
 end
 
 function _cov!(dest, χ_diff_x::AugmentedSigmaPoints, 𝓨_diff_y::AugmentedSigmaPoints, weight_i)
-    dest .+= weight_i .*
-        (Mul(χ_diff_x.xi_P_plus, 𝓨_diff_y.xi_P_plus') .+
-        Mul(χ_diff_x.xi_P_minus, 𝓨_diff_y.xi_P_minus') .+
-        Mul(χ_diff_x.xi_noise_plus, 𝓨_diff_y.xi_noise_plus') .+
-        Mul(χ_diff_x.xi_noise_minus, 𝓨_diff_y.xi_noise_minus'))
+    dest .+= weight_i .* (
+        χ_diff_x.xi_P_plus * 𝓨_diff_y.xi_P_plus' .+
+        χ_diff_x.xi_P_minus * 𝓨_diff_y.xi_P_minus' .+
+        χ_diff_x.xi_noise_plus * 𝓨_diff_y.xi_noise_plus' .+
+        χ_diff_x.xi_noise_minus * 𝓨_diff_y.xi_noise_minus'
+    )
 end
 
 function cov(χ_diff_x::AugmentedSigmaPoints, noise::Nothing, weight_params::AbstractWeightingParameters)

@@ -171,8 +171,8 @@ end
 
 function cov!(dest, χ_diff_x::PseudoSigmaPoints, 𝓨_diff_y::AbstractSigmaPoints, weight_params::AbstractWeightingParameters)
     weight_0, weight_i = calc_cov_weights(weight_params, (size(𝓨_diff_y, 2) - 1) >> 1)
-    dest .= weight_i .* (Mul(χ_diff_x.xi_P_plus, 𝓨_diff_y.xi_P_plus') .+
-        Mul(χ_diff_x.xi_P_minus, 𝓨_diff_y.xi_P_minus'))
+    dest .= weight_i .* (χ_diff_x.xi_P_plus * 𝓨_diff_y.xi_P_plus' .+
+        χ_diff_x.xi_P_minus * 𝓨_diff_y.xi_P_minus')
     dest
 end
 
@@ -190,8 +190,8 @@ function cov!(dest, χ_diff_x::AbstractSigmaPoints, 𝓨_diff_y::AbstractSigmaPo
 end
 
 function _cov!(dest, χ_diff_x::AbstractSigmaPoints, 𝓨_diff_y::AbstractSigmaPoints, weight_i)
-    dest .+= weight_i .* (Mul(χ_diff_x.xi_P_plus, 𝓨_diff_y.xi_P_plus') .+
-        Mul(χ_diff_x.xi_P_minus, 𝓨_diff_y.xi_P_minus'))
+    dest .+= weight_i .* (χ_diff_x.xi_P_plus * 𝓨_diff_y.xi_P_plus' .+
+        χ_diff_x.xi_P_minus * 𝓨_diff_y.xi_P_minus')
 end
 
 function calc_lower_triangle_cholesky(mat, weight_params::AbstractWeightingParameters)
