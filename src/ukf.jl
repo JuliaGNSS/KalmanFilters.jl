@@ -32,7 +32,7 @@ end
 
 UKFTUIntermediate(T::Type, num_x::Number) =
     UKFTUIntermediate(
-        LowerTriangular(Matrix{T}(undef, num_x, num_x)),
+        Cholesky(Matrix{T}(undef, num_x, num_x), 'L', 0),
         SigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x)),
         SigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x))
     )
@@ -68,7 +68,7 @@ function UKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
         Matrix{T}(undef, num_y, num_y),
         Matrix{T}(undef, num_x, num_y),
         Matrix{T}(undef, num_x, num_y),
-        LowerTriangular(Matrix{T}(undef, num_x, num_x)),
+        Cholesky(Matrix{T}(undef, num_x, num_x), 'L', 0),
         Vector{T}(undef, num_y),
         PseudoSigmaPoints(LowerTriangular(Matrix{T}(undef, num_x, num_x))),
         SigmaPoints(Vector{T}(undef, num_y), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_x)),
@@ -184,7 +184,6 @@ end
 
 function cov!(dest, χ_diff_x::AbstractSigmaPoints, 𝓨_diff_y::AbstractSigmaPoints, weight_params::AbstractWeightingParameters)
     weight_0, weight_i = calc_cov_weights(weight_params, (size(𝓨_diff_y, 2) - 1) >> 1)
-    # Once https://github.com/JuliaArrays/LazyArrays.jl/issues/27 is fixed: dest .= weight_0 .* Mul(χ_diff_x.x0, 𝓨_diff_y.x0')
     dest .= weight_0 .* χ_diff_x.x0 * 𝓨_diff_y.x0'
     _cov!(dest, χ_diff_x, 𝓨_diff_y, weight_i)
 end
@@ -194,44 +193,44 @@ function _cov!(dest, χ_diff_x::AbstractSigmaPoints, 𝓨_diff_y::AbstractSigmaP
         χ_diff_x.xi_P_minus * 𝓨_diff_y.xi_P_minus')
 end
 
-function calc_lower_triangle_cholesky(mat, weight_params::AbstractWeightingParameters)
+function calc_weighted_cholesky(mat, weight_params::AbstractWeightingParameters)
     weight = calc_cholesky_weight(weight_params, size(mat, 1))
-    cholesky(Hermitian(mat .* weight)).L
+    cholesky(Hermitian(mat .* weight))
 end
 
-function calc_lower_triangle_cholesky!(dest, mat, weight_params::AbstractWeightingParameters)
+function calc_weighted_cholesky!(dest, mat, weight_params::AbstractWeightingParameters)
     weight = calc_cholesky_weight(weight_params, size(mat, 1))
-    copyto!(dest.data, mat)
-    dest.data .*= weight
-    cholesky!(Hermitian(dest.data)).L
+    copyto!(dest.factors, mat)
+    dest.factors .*= weight
+    cholesky!(Hermitian(dest.factors))
 end
 
 function apply_func_to_sigma_points(F, x, weighted_P_chol)
     χ₁ = F(x)
-    χ₂ = map(F, eachcol(x .+ weighted_P_chol))
-    χ₃ = map(F, eachcol(x .- weighted_P_chol))
+    χ₂ = map(F, eachcol(x .+ weighted_P_chol.L))
+    χ₃ = map(F, eachcol(x .- weighted_P_chol.L))
     SigmaPoints(χ₁, reduce(hcat, χ₂), reduce(hcat, χ₃))
 end
 
 function apply_func_to_sigma_points!(χ, F!, x, weighted_P_chol)
     F!(χ.x0, x)
-    foreach(F!, eachcol(χ.xi_P_plus), eachcol(x .+ weighted_P_chol))
-    foreach(F!, eachcol(χ.xi_P_minus), eachcol(x .- weighted_P_chol))
+    foreach(F!, eachcol(χ.xi_P_plus), eachcol(x .+ weighted_P_chol.L))
+    foreach(F!, eachcol(χ.xi_P_minus), eachcol(x .- weighted_P_chol.L))
     χ
 end
 
 function create_pseudo_sigmapoints(weighted_P_chol)
-    PseudoSigmaPoints(weighted_P_chol)
+    PseudoSigmaPoints(weighted_P_chol.L)
 end
 
 function create_pseudo_sigmapoints!(χ_diff_x, weighted_P_chol)
-    χ_diff_x.xi_P_plus[:,:] .= weighted_P_chol
-    χ_diff_x.xi_P_minus[:,:] .= -weighted_P_chol
+    χ_diff_x.xi_P_plus[:,:] .= weighted_P_chol.L
+    χ_diff_x.xi_P_minus[:,:] .= -weighted_P_chol.L
     χ_diff_x
 end
 
 function time_update(x, P, F::Function, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
-    weighted_P_chol = calc_lower_triangle_cholesky(P, weight_params)
+    weighted_P_chol = calc_weighted_cholesky(P, weight_params)
     χ = apply_func_to_sigma_points(F, x, weighted_P_chol)
     x_apri = mean(χ, weight_params)
     χ_diff_x = χ .- x_apri
@@ -241,7 +240,7 @@ end
 
 function time_update!(tu::UKFTUIntermediate, x, P, F!::Function, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     χ_diff_x = tu.χ_diff_x
-    weighted_P_chol = calc_lower_triangle_cholesky!(tu.weighted_P_chol, P, weight_params)
+    weighted_P_chol = calc_weighted_cholesky!(tu.weighted_P_chol, P, weight_params)
     χ = apply_func_to_sigma_points!(tu.χ, F!, x, weighted_P_chol)
     x_apri = mean!(x, χ, weight_params)
     χ_diff_x .= χ .- x_apri
@@ -250,7 +249,7 @@ function time_update!(tu::UKFTUIntermediate, x, P, F!::Function, Q, weight_param
 end
 
 function measurement_update(x, P, y, H::Function, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
-    weighted_P_chol = calc_lower_triangle_cholesky(P, weight_params)
+    weighted_P_chol = calc_weighted_cholesky(P, weight_params)
     χ_diff_x = create_pseudo_sigmapoints(weighted_P_chol)
     𝓨 = apply_func_to_sigma_points(H, x, weighted_P_chol)
     y_est = mean(𝓨, weight_params)
@@ -266,7 +265,7 @@ end
 
 function measurement_update!(mu::UKFMUIntermediate, x, P, y, H!::Function, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     𝓨_diff_y, ỹ = mu.𝓨_diff_y, mu.innovation
-    weighted_P_chol = calc_lower_triangle_cholesky!(mu.weighted_P_chol, P, weight_params)
+    weighted_P_chol = calc_weighted_cholesky!(mu.weighted_P_chol, P, weight_params)
     χ_diff_x = create_pseudo_sigmapoints!(mu.χ_diff_x, weighted_P_chol)
     𝓨 = apply_func_to_sigma_points!(mu.𝓨, H!, x, weighted_P_chol)
     y_est = mean!(mu.estimated_measurement, 𝓨, weight_params)

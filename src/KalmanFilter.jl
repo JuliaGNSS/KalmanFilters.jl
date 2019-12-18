@@ -1,6 +1,12 @@
 module KalmanFilter
 
-    using DocStringExtensions, Distributions, LinearAlgebra, LazyArrays, Statistics
+    using
+        DocStringExtensions,
+        Distributions,
+        LinearAlgebra,
+        LazyArrays,
+        Statistics
+
     import Statistics: mean, cov
 
     export
@@ -13,11 +19,13 @@ module KalmanFilter
         UKFTUIntermediate,
         KFMUIntermediate,
         UKFMUIntermediate,
-        state,
-        covariance,
-        innovation,
-        innovation_covariance,
-        kalman_gain,
+        get_state,
+        get_covariance,
+        get_innovation,
+        get_innovation_covariance,
+        get_kalman_gain,
+        get_sqrt_covariance,
+        get_sqrt_innovation_covariance,
         time_update,
         time_update!,
         measurement_update,
@@ -29,22 +37,57 @@ module KalmanFilter
 
     abstract type AbstractTimeUpdate end
     abstract type AbstractMeasurementUpdate end
+    abstract type AbstractSRTimeUpdate <: AbstractTimeUpdate end
+    abstract type AbstractSRMeasurementUpdate <: AbstractMeasurementUpdate end
     abstract type AbstractWeightingParameters end
 
-    state(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate}) = kf.state
-    covariance(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate}) = kf.covariance
-    innovation(kf::AbstractMeasurementUpdate) = kf.innovation
-    innovation_covariance(kf::AbstractMeasurementUpdate) = kf.innovation_covariance
-    kalman_gain(kf::AbstractMeasurementUpdate) = kf.kalman_gain
+    function get_state(kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate})
+        kf.state
+    end
+    function get_covariance(
+        kf::Union{<: AbstractTimeUpdate, <: AbstractMeasurementUpdate}
+    )
+        kf.covariance
+    end
+    get_innovation(kf::AbstractMeasurementUpdate) = kf.innovation
+    get_innovation_covariance(kf::AbstractMeasurementUpdate) = kf.innovation_covariance
+    get_kalman_gain(kf::AbstractMeasurementUpdate) = kf.kalman_gain
+
+    function get_covariance(
+        kf::Union{<: AbstractSRTimeUpdate, <: AbstractSRMeasurementUpdate}
+    )
+        kf.covariance.U * kf.covariance.L
+    end
+
+    function get_sqrt_covariance(
+        kf::Union{<: AbstractSRTimeUpdate, <: AbstractSRMeasurementUpdate}
+    )
+        kf.covariance
+    end
+
+    function get_innovation_covariance(
+        kf::Union{<: AbstractSRTimeUpdate, <: AbstractSRMeasurementUpdate}
+    )
+        kf.innovation_covariance.U * kf.innovation_covariance.L
+    end
+
+    function get_sqrt_innovation_covariance(
+        kf::Union{<: AbstractSRTimeUpdate, <: AbstractSRMeasurementUpdate}
+    )
+        kf.innovation_covariance
+    end
 
     @static if VERSION < v"1.1"
         eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
     end
 
     include("kf.jl")
+    include("srkf.jl")
     include("sigmapoints.jl")
     include("ukf.jl")
     include("aukf.jl")
+    include("srukf.jl")
+    include("sraukf.jl")
     include("tests.jl")
 
 end

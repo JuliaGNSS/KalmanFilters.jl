@@ -35,14 +35,14 @@
     tu = time_update(x_init, P_init, F, Q)
     for i = 1:maxiter
         measurement, states = measure(states, Δt, σ_meas_noise, σ_acc_noise)
-        mu = measurement_update(state(tu), covariance(tu), measurement, H, R)
-        tu = time_update(state(mu), covariance(mu), F, Q)
+        mu = measurement_update(get_state(tu), get_covariance(tu), measurement, H, R)
+        tu = time_update(get_state(mu), get_covariance(mu), F, Q)
 
         #s̃_over_time[counter] = state(mu)[1]
         #s_over_time[counter] = states[1]
         #z_over_time[counter] = measurement
-        ỹ_over_time[counter] = innovation(mu)
-        S_over_time[counter] = innovation_covariance(mu)
+        ỹ_over_time[counter] = get_innovation(mu)
+        S_over_time[counter] = get_innovation_covariance(mu)
         counter += 1
     end
     #using PyPlot

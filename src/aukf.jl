@@ -1,6 +1,6 @@
 UKFTUIntermediate(T::Type, num_x::Number, augment) =
     UKFTUIntermediate(
-        Augmented(LowerTriangular(Matrix{T}(undef, num_x, num_x)), LowerTriangular(Matrix{T}(undef, num_x, num_x))),
+        Augmented(Cholesky(Matrix{T}(undef, num_x, num_x), 'L', 0), Cholesky(Matrix{T}(undef, num_x, num_x), 'L', 0)),
         AugmentedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x)),
         AugmentedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x))
     )
@@ -14,7 +14,7 @@ function UKFMUIntermediate(T::Type, num_x::Number, num_y::Number, augment)
         Matrix{T}(undef, num_y, num_y),
         Matrix{T}(undef, num_x, num_y),
         Matrix{T}(undef, num_x, num_y),
-        Augmented(LowerTriangular(Matrix{T}(undef, num_x, num_x)), LowerTriangular(Matrix{T}(undef, num_x, num_x))),
+        Augmented(Cholesky(Matrix{T}(undef, num_x, num_x), 'L', 0), Cholesky(Matrix{T}(undef, num_x, num_x), 'L', 0)),
         Vector{T}(undef, num_y),
         AugmentedPseudoSigmaPoints(Augmented(LowerTriangular(Matrix{T}(undef, num_x, num_x)), LowerTriangular(Matrix{T}(undef, num_x, num_x)))),
         AugmentedSigmaPoints(Vector{T}(undef, num_y), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_y), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_y)),
@@ -24,48 +24,48 @@ end
 
 UKFMUIntermediate(num_x::Number, num_y::Number, augment) = UKFMUIntermediate(Float64, num_x, num_y, augment)
 
-struct Augmented{A <: AbstractArray{T, 2} where T}
+struct Augmented{A, B}
     P::A
+    noise::B
+end
+
+struct Augment{A}
     noise::A
 end
 
-struct Augment{A <: AbstractArray{T, 2} where T}
-    noise::A
-end
-
-function calc_lower_triangle_cholesky(mat::Augmented, weight_params::AbstractWeightingParameters)
+function calc_weighted_cholesky(mat::Augmented, weight_params::AbstractWeightingParameters)
     weight = calc_cholesky_weight(weight_params, size(mat.P, 1) + size(mat.noise, 1))
-    cholP = cholesky(Hermitian(mat.P .* weight)).L
-    cholN = cholesky(mat.noise .* weight).L
+    cholP = cholesky(Hermitian(mat.P .* weight))
+    cholN = cholesky(mat.noise .* weight)
     Augmented(cholP, cholN)
 end
 
-function calc_lower_triangle_cholesky!(dest::Augmented, mat::Augmented, weight_params::AbstractWeightingParameters)
+function calc_weighted_cholesky!(dest::Augmented, mat::Augmented, weight_params::AbstractWeightingParameters)
     weight = calc_cholesky_weight(weight_params, size(mat.P, 1) + size(mat.noise, 1))
-    copyto!(dest.P.data, mat.P)
-    copyto!(dest.noise.data, mat.noise)
-    dest.P.data .*= weight
-    dest.noise.data .*= weight
-    cholP = cholesky!(Hermitian(dest.P.data)).L
-    cholN = cholesky!(dest.noise.data).L
+    copyto!(dest.P.factors, mat.P)
+    copyto!(dest.noise.factors, mat.noise)
+    dest.P.factors .*= weight
+    dest.noise.factors .*= weight
+    cholP = cholesky!(Hermitian(dest.P.factors))
+    cholN = cholesky!(dest.noise.factors)
     Augmented(cholP, cholN)
 end
 
 function apply_func_to_sigma_points(F, x, weighted_chol::Augmented)
     χ₁ = F(x)
-    χ₂ = map(F, eachcol(x .+ weighted_chol.P))
-    χ₃ = map(noise -> F(x, noise), eachcol(weighted_chol.noise))
-    χ₄ = map(F, eachcol(x .- weighted_chol.P))
-    χ₅ = map(noise -> F(x, noise), eachcol(-weighted_chol.noise))
+    χ₂ = map(F, eachcol(x .+ weighted_chol.P.L))
+    χ₃ = map(noise -> F(x, noise), eachcol(weighted_chol.noise.L))
+    χ₄ = map(F, eachcol(x .- weighted_chol.P.L))
+    χ₅ = map(noise -> F(x, noise), eachcol(-weighted_chol.noise.L))
     AugmentedSigmaPoints(χ₁, reduce(hcat, χ₂), reduce(hcat, χ₃), reduce(hcat, χ₄), reduce(hcat, χ₅))
 end
 
 function apply_func_to_sigma_points!(χ, F!, x, weighted_chol::Augmented)
     F!(χ.x0, x)
-    foreach(F!, eachcol(χ.xi_P_plus), eachcol(x .+ weighted_chol.P))
-    foreach(F!, eachcol(χ.xi_P_minus), eachcol(x .- weighted_chol.P))
-    foreach((y, noise) -> F!(y, x, noise), eachcol(χ.xi_noise_plus), eachcol(weighted_chol.noise))
-    foreach((y, noise) -> F!(y, x, noise), eachcol(χ.xi_noise_minus), eachcol(-weighted_chol.noise))
+    foreach(F!, eachcol(χ.xi_P_plus), eachcol(x .+ weighted_chol.P.L))
+    foreach(F!, eachcol(χ.xi_P_minus), eachcol(x .- weighted_chol.P.L))
+    foreach((y, noise) -> F!(y, x, noise), eachcol(χ.xi_noise_plus), eachcol(weighted_chol.noise.L))
+    foreach((y, noise) -> F!(y, x, noise), eachcol(χ.xi_noise_minus), eachcol(-weighted_chol.noise.L))
     χ
 end
 
@@ -111,12 +111,12 @@ function cov!(P, χ_diff_x::AugmentedSigmaPoints, noise::Nothing, weight_params:
 end
 
 function create_pseudo_sigmapoints(weighted_P_chol::Augmented)
-    AugmentedPseudoSigmaPoints(weighted_P_chol)
+    AugmentedPseudoSigmaPoints(weighted_P_chol.P.L, -weighted_P_chol.P.L)
 end
 
 function create_pseudo_sigmapoints!(χ_diff_x, weighted_P_chol::Augmented)
-    χ_diff_x.xi_P_plus .= weighted_P_chol.P
-    χ_diff_x.xi_P_minus .= -weighted_P_chol.P
+    χ_diff_x.xi_P_plus .= weighted_P_chol.P.L
+    χ_diff_x.xi_P_minus .= -weighted_P_chol.P.L
     χ_diff_x
 end
 

@@ -5,9 +5,9 @@
 Provides multiple Kalman Filters
 
 ## Features
-* Kalman Filter (KF)
-* Unscented Kalman Filter (UKF)
-* Augment Unscented Kalman Filter (AUKF)
+* (Square Root) Kalman Filter ((SR-)KF)
+* (Square Root) Unscented Kalman Filter ((SR-)UKF)
+* (Square Root) Augment Unscented Kalman Filter ((SR-)AUKF)
 
 ## Getting started
 
@@ -33,8 +33,8 @@ P_init = [2.5 0.25 0.1; 0.25 2.5 0.2; 0.1 0.2 2.5]
 tu = time_update(x_init, P_init, F, Q)
 for i = 1:100
     # Take a measurement
-    mu = measurement_update(state(tu), covariance(tu), measurement, H, R)
-    tu = time_update(state(mu), covariance(mu), F, Q)
+    mu = measurement_update(get_state(tu), get_covariance(tu), measurement, H, R)
+    tu = time_update(get_state(mu), get_covariance(mu), F, Q)
 end
 ```
 ### Non-linear case
@@ -52,6 +52,17 @@ F(x, noise) = x .* [1., 2.] .+ noise
 tu = time_update(x, P, F, Augment(Q))
 H(x, noise) = x .* [1., 1.] .+ noise
 mu = measurement_update(x, P, measurement, H, Augment(R))
+```
+
+### Square Root Kalman filter
+If you'd like to use the square root variant of the Kalman filter, you will have to pass the cholesky decomposition of the corresponding Covariance, for e.g.:
+```
+using LinearAlgebra
+P_init_chol = cholesky(P_init)
+Q_chol = cholesky(Q)
+R_chol = cholesky(R)
+tu = time_update(x_init, P_init_chol, F, Q_chol)
+mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), measurement, H, Augment(R_chol))
 ```
 
 ### Statistical consistency testing
