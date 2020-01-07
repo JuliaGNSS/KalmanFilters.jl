@@ -100,6 +100,20 @@
         tu = time_update!(tu_inter, x, P, F!, Augment(Q))
         @test get_state(tu) ≈ [1., 2.]
         @test get_covariance(tu) ≈ [2. 0.; 0. 5.]
+
+        x = randn(6)
+        A = randn(6,6)
+        P = A'A
+        B = randn(6,6)
+        Q = B'B
+        F = randn(6,6)
+        f(x) = F * x
+        f(x, noise) = F * x .+ noise
+
+        tu = time_update(x, P, F, Q)
+        tu_aug = time_update(x, P, f, Augment(Q))
+        @test get_covariance(tu) ≈ get_covariance(tu_aug)
+        @test get_state(tu) ≈ get_state(tu_aug)
     end
 
     @testset "Measurement update" begin
@@ -128,5 +142,20 @@
         @test get_innovation(mu) ≈ [0.0, 0.0] atol = 2e-10 #?
         @test get_innovation_covariance(mu) ≈ [2.0 0.0; 0.0 2.0]
         @test get_kalman_gain(mu) ≈ [0.5 0.0; 0.0 0.5]
+
+        x = randn(6)
+        A = randn(6,6)
+        P = A'A
+        B = randn(3,3)
+        R = B'B
+        y = randn(3)
+        H = randn(3,6)
+        h(x) = H * x
+        h(x, noise) = H * x .+ noise
+
+        tu = measurement_update(x, P, y, H, R)
+        tu_aug = measurement_update(x, P, y, h, Augment(R))
+        @test get_covariance(tu) ≈ get_covariance(tu_aug)
+        @test get_state(tu) ≈ get_state(tu_aug)
     end
 end

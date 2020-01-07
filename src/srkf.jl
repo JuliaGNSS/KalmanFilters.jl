@@ -22,12 +22,14 @@ function measurement_update(x, P::Cholesky, y, H, R::Cholesky)
     ỹ = y .- H * x
     dim_y = length(y)
     dim_x = length(x)
-    M = [R.U        zeros(dim_y, dim_x)
-         H * P.U    P.U                 ]
+    M = zeros(dim_y + dim_x, dim_y + dim_x)
+    M[1:dim_y, 1:dim_y] .= R.U
+    M[dim_y + 1:end, 1:dim_y] .= (H * P.L)'
+    M[dim_y + 1:end, dim_y + 1:end] .= P.U
     Q, R = qr(M)
-    PHᵀ = Cholesky(R[1:dim_y, dim_y + 1:end], 'U', 0)
+    PHᵀ = transpose(R[1:dim_y, dim_y + 1:end])
     S = Cholesky(R[1:dim_y, 1:dim_y], 'U', 0)
-    K = PHᵀ.L / S.L
+    K = PHᵀ / S.L
     x_post = x .+ K * ỹ
     P_post = Cholesky(R[dim_y + 1:end, dim_y + 1:end], 'U', 0)
     SRKFMeasurementUpdate(x_post, P_post, ỹ, S, K)

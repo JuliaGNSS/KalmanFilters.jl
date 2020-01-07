@@ -56,7 +56,7 @@ module KalmanFilter
     function get_covariance(
         kf::Union{<: AbstractSRTimeUpdate, <: AbstractSRMeasurementUpdate}
     )
-        kf.covariance.U * kf.covariance.L
+        kf.covariance.L * kf.covariance.U
     end
 
     function get_sqrt_covariance(
@@ -68,7 +68,7 @@ module KalmanFilter
     function get_innovation_covariance(
         kf::Union{<: AbstractSRTimeUpdate, <: AbstractSRMeasurementUpdate}
     )
-        kf.innovation_covariance.U * kf.innovation_covariance.L
+        kf.innovation_covariance.L * kf.innovation_covariance.U
     end
 
     function get_sqrt_innovation_covariance(

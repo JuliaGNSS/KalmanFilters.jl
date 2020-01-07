@@ -24,7 +24,7 @@ function cov(
     weight_params::AbstractWeightingParameters
 )
     weight_0, weight_i = calc_cov_weights(weight_params, (size(χ_diff_x, 2) - 1) >> 1)
-    Q, R = qr(hcat(
+    Q, R = qr(Hcat(
         sqrt(weight_i) * χ_diff_x.xi_P_plus,
         sqrt(weight_i) * χ_diff_x.xi_P_minus,
         noise.L)'
