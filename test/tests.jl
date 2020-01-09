@@ -22,6 +22,12 @@
     nis_over_time_bv = map((x, σ²) -> nis(x, σ²), biased_innos, biased_variance)
     dof_bv = num_samples * 2
     @test nis_test(nis_over_time_bv, dof_bv) == false
+
+    A = randn(4,4)
+    P = A'A
+    P_chol = cholesky(P)
+    x = randn(4)
+    @test nis(x, P) ≈ nis(x, P_chol)
 end
 
 @testset "σ bound test" begin

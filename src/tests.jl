@@ -65,3 +65,7 @@ Returns NIS-value for a single innovation sequence `seq` and its variance `var`
 function nis(seq, var)
     dot(seq, var \ seq)
 end
+
+function nis(seq, var::Cholesky)
+    seq' / var.U / var.L * seq
+end
