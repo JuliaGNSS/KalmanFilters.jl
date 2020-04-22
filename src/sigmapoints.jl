@@ -110,7 +110,7 @@ Base.setindex!(S::AugmentedSigmaPoints{T}, val, inds::Vararg{Int,2}) where {T} =
         S.xi_noise_minus[inds[1], inds[2] - size(S.xi_P_plus, 2) - size(S.xi_noise_plus, 2) - size(S.xi_P_minus, 2) - 1] = val
     end
 
-AugmentedSigmaPoints(x0::Vector{T}, xi_P_plus::Matrix{T}, xi_noise_plus::Matrix{T}, xi_P_minus::Matrix{T}, xi_noise_minus::Matrix{T}) where {T} =
+AugmentedSigmaPoints(x0::AbstractVector{T}, xi_P_plus::Matrix{T}, xi_noise_plus::Matrix{T}, xi_P_minus::Matrix{T}, xi_noise_minus::Matrix{T}) where {T} =
     AugmentedSigmaPoints{T}(x0, xi_P_plus, xi_noise_plus, xi_P_minus, xi_noise_minus)
 
 Base.BroadcastStyle(::Type{<:AugmentedSigmaPoints}) = Broadcast.ArrayStyle{AugmentedSigmaPoints}()
