@@ -128,18 +128,18 @@ function calc_posterior_covariance!(P::Augmented, PHᵀ, K)
     calc_posterior_covariance!(P.P, PHᵀ, K)
 end
 
-function time_update(x, P, F::Function, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function time_update(x, P, F, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     time_update(x, Augmented(P, Q.noise), F, nothing, weight_params)
 end
 
-function time_update!(tu::UKFTUIntermediate, x, P, F!::Function, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function time_update!(tu::UKFTUIntermediate, x, P, F!, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     time_update!(tu, x, Augmented(P, Q.noise), F!, nothing, weight_params)
 end
 
-function measurement_update(x, P, y, H::Function, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function measurement_update(x, P, y, H, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     measurement_update(x, Augmented(P, R.noise), y, H, nothing, weight_params)
 end
 
-function measurement_update!(mu::UKFMUIntermediate, x, P, y, H!::Function, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function measurement_update!(mu::UKFMUIntermediate, x, P, y, H!, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     measurement_update!(mu, x, Augmented(P, R.noise), y, H!, nothing, weight_params)
 end

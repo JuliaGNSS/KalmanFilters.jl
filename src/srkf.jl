@@ -11,14 +11,20 @@ struct SRKFMeasurementUpdate{X,P,R,S,K} <: AbstractSRMeasurementUpdate
     kalman_gain::K
 end
 
-function time_update(x, P::Cholesky, F, Q::Cholesky)
+function time_update(x, P::Cholesky, F::Union{Number, AbstractMatrix}, Q::Cholesky)
     x_apriori = F * x
     Q, R = qr(Hcat(F * P.L, Q.L)')
     P_apriori = Cholesky(R, 'U', 0)
     SRKFTimeUpdate(x_apriori, P_apriori)
 end
 
-function measurement_update(x, P::Cholesky, y, H, R::Cholesky)
+function measurement_update(
+    x,
+    P::Cholesky,
+    y,
+    H::Union{Number, AbstractVector, AbstractMatrix},
+    R::Cholesky
+)
     ỹ = y .- H * x
     dim_y = length(y)
     dim_x = length(x)

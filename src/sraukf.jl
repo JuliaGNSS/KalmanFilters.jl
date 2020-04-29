@@ -29,7 +29,7 @@ end
 function time_update(
     x,
     P::Cholesky,
-    F::Function,
+    F,
     Q::Augment{<: Cholesky},
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)
 )
@@ -46,7 +46,7 @@ function measurement_update(
     x,
     P::Cholesky,
     y,
-    H::Function,
+    H,
     R::Augment{<: Cholesky},
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0)
 )

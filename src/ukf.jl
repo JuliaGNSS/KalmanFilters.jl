@@ -229,7 +229,7 @@ function create_pseudo_sigmapoints!(χ_diff_x, weighted_P_chol)
     χ_diff_x
 end
 
-function time_update(x, P, F::Function, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function time_update(x, P, F, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     weighted_P_chol = calc_weighted_cholesky(P, weight_params)
     χ = apply_func_to_sigma_points(F, x, weighted_P_chol)
     x_apri = mean(χ, weight_params)
@@ -238,7 +238,7 @@ function time_update(x, P, F::Function, Q, weight_params::AbstractWeightingParam
     UKFTimeUpdate(x_apri, P_apri, χ)
 end
 
-function time_update!(tu::UKFTUIntermediate, x, P, F!::Function, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function time_update!(tu::UKFTUIntermediate, x, P, F!, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     χ_diff_x = tu.χ_diff_x
     weighted_P_chol = calc_weighted_cholesky!(tu.weighted_P_chol, P, weight_params)
     χ = apply_func_to_sigma_points!(tu.χ, F!, x, weighted_P_chol)
@@ -248,7 +248,7 @@ function time_update!(tu::UKFTUIntermediate, x, P, F!::Function, Q, weight_param
     UKFTimeUpdate(x_apri, P_apri, χ)
 end
 
-function measurement_update(x, P, y, H::Function, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function measurement_update(x, P, y, H, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     weighted_P_chol = calc_weighted_cholesky(P, weight_params)
     χ_diff_x = create_pseudo_sigmapoints(weighted_P_chol)
     𝓨 = apply_func_to_sigma_points(H, x, weighted_P_chol)
@@ -263,7 +263,7 @@ function measurement_update(x, P, y, H::Function, R, weight_params::AbstractWeig
     UKFMeasurementUpdate(x_post, P_post, 𝓨, ỹ, S, K)
 end
 
-function measurement_update!(mu::UKFMUIntermediate, x, P, y, H!::Function, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function measurement_update!(mu::UKFMUIntermediate, x, P, y, H!, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     𝓨_diff_y, ỹ = mu.𝓨_diff_y, mu.innovation
     weighted_P_chol = calc_weighted_cholesky!(mu.weighted_P_chol, P, weight_params)
     χ_diff_x = create_pseudo_sigmapoints!(mu.χ_diff_x, weighted_P_chol)

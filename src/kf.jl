@@ -62,19 +62,19 @@ end
 
 KFMUIntermediate(num_x::Number, num_y::Number) = KFMUIntermediate(Float64, num_x, num_y)
 
-function time_update(x, P, F, Q)
+function time_update(x, P, F::Union{Number, AbstractMatrix}, Q)
     x_apri = F * x
     P_apri = F * P * F' .+ Q
     KFTimeUpdate(x_apri, P_apri)
 end
 
-function time_update!(tu::KFTUIntermediate, x, P, F, Q)
+function time_update!(tu::KFTUIntermediate, x, P, F::Union{Number, AbstractMatrix}, Q)
     x_apri = calc_apriori_state!(tu.state_temp, x, F)
     P_apri = calc_apriori_covariance!(tu.fp, P, F, Q)
     KFTimeUpdate(x_apri, P_apri)
 end
 
-function measurement_update(x, P, y, H, R)
+function measurement_update(x, P, y, H::Union{Number, AbstractVector, AbstractMatrix}, R)
     ỹ = y .- H * x
     PHᵀ = P * H'
     S = H * PHᵀ .+ R
@@ -84,7 +84,14 @@ function measurement_update(x, P, y, H, R)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
-function measurement_update!(mu::KFMUIntermediate, x, P, y, H, R)
+function measurement_update!(
+    mu::KFMUIntermediate,
+    x,
+    P,
+    y,
+    H::Union{Number, AbstractVector, AbstractMatrix},
+    R
+)
     PHᵀ = mu.pht
     ỹ = calc_innovation!(mu.innovation, H, x, y)
     mul!(PHᵀ, P, H')
