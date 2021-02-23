@@ -2,7 +2,9 @@ UKFTUIntermediate(T::Type, num_x::Number, augment) =
     UKFTUIntermediate(
         Augmented(Cholesky(Matrix{T}(undef, num_x, num_x), 'L', 0), Cholesky(Matrix{T}(undef, num_x, num_x), 'L', 0)),
         AugmentedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x)),
-        AugmentedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x))
+        AugmentedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x)),
+        Vector{T}(undef, num_x),
+        Matrix{T}(undef, num_x, num_x)
     )
 
 UKFTUIntermediate(num_x::Number, augment) = UKFTUIntermediate(Float64, num_x, augment)
@@ -18,7 +20,9 @@ function UKFMUIntermediate(T::Type, num_x::Number, num_y::Number, augment)
         Vector{T}(undef, num_y),
         AugmentedPseudoSigmaPoints(Augmented(LowerTriangular(Matrix{T}(undef, num_x, num_x)), LowerTriangular(Matrix{T}(undef, num_x, num_x)))),
         AugmentedSigmaPoints(Vector{T}(undef, num_y), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_y), Matrix{T}(undef, num_y, num_x), Matrix{T}(undef, num_y, num_y)),
-        Matrix{T}(undef, num_y, num_y)
+        Matrix{T}(undef, num_y, num_y),
+        Vector{T}(undef, num_x),
+        Matrix{T}(undef, num_x, num_x)
     )
 end
 

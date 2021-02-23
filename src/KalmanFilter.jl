@@ -16,8 +16,10 @@ module KalmanFilter
         ScaledSetWeightingParameters,
         Augment,
         KFTUIntermediate,
+        SRKFTUIntermediate,
         UKFTUIntermediate,
         KFMUIntermediate,
+        SRKFMUIntermediate,
         UKFMUIntermediate,
         get_state,
         get_covariance,
@@ -85,9 +87,9 @@ module KalmanFilter
     include("srkf.jl")
     include("sigmapoints.jl")
     include("ukf.jl")
-    include("aukf.jl")
-    include("srukf.jl")
-    include("sraukf.jl")
+#    include("aukf.jl")
+#    include("srukf.jl")
+#    include("sraukf.jl")
     include("tests.jl")
 
 end

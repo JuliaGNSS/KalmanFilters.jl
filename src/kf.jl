@@ -4,13 +4,15 @@ struct KFTimeUpdate{X,P} <: AbstractTimeUpdate
 end
 
 struct KFTUIntermediate{T}
-    state_temp::Vector{T}
+    x_apri::Vector{T}
+    p_apri::Matrix{T}
     fp::Matrix{T}
 end
 
 KFTUIntermediate(T::Type, num_x::Number) =
     KFTUIntermediate(
         Vector{T}(undef, num_x),
+        Matrix{T}(undef, num_x, num_x),
         Matrix{T}(undef, num_x, num_x)
     )
 
@@ -29,60 +31,52 @@ struct KFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     innovation_covariance::Matrix{T}
     kalman_gain::K
     pht::K
-    s_lu::Matrix{T}
+    s_chol::Matrix{T}
+    x_posterior::Vector{T}
+    p_posterior::Matrix{T}
 end
 
 function KFMUIntermediate(T::Type, num_x::Number, num_y::Number)
-    if num_y == 1
-        return KFMUIntermediate(
-            Vector{T}(undef, num_y),
-            Matrix{T}(undef, num_y, num_y),
-            Vector{T}(undef, num_x),
-            Vector{T}(undef, num_x),
-            Matrix{T}(undef, num_y, num_y)
-        )
-    elseif num_x == 1
-        return KFMUIntermediate(
-            Vector{T}(undef, num_y),
-            Matrix{T}(undef, num_y, num_y),
-            adjoint(Vector{T}(undef, num_y)),
-            adjoint(Vector{T}(undef, num_y)),
-            Matrix{T}(undef, num_y, num_y)
-        )
-    else
-        return KFMUIntermediate(
-            Vector{T}(undef, num_y),
-            Matrix{T}(undef, num_y, num_y),
-            Matrix{T}(undef, num_x, num_y),
-            Matrix{T}(undef, num_x, num_y),
-            Matrix{T}(undef, num_y, num_y)
-        )
-    end
+    return KFMUIntermediate(
+        Vector{T}(undef, num_y),
+        Matrix{T}(undef, num_y, num_y),
+        Matrix{T}(undef, num_x, num_y),
+        Matrix{T}(undef, num_x, num_y),
+        Matrix{T}(undef, num_y, num_y),
+        Vector{T}(undef, num_x),
+        Matrix{T}(undef, num_x, num_x)
+    )
 end
 
 KFMUIntermediate(num_x::Number, num_y::Number) = KFMUIntermediate(Float64, num_x, num_y)
 
 function time_update(x, P, F::Union{Number, AbstractMatrix}, Q)
-    x_apri = F * x
+    x_apri = calc_apriori_state(x, F)
     P_apri = F * P * F' .+ Q
     KFTimeUpdate(x_apri, P_apri)
 end
 
+calc_apriori_state(x, F) = F * x
+
 function time_update!(tu::KFTUIntermediate, x, P, F::Union{Number, AbstractMatrix}, Q)
-    x_apri = calc_apriori_state!(tu.state_temp, x, F)
-    P_apri = calc_apriori_covariance!(tu.fp, P, F, Q)
+    x_apri = calc_apriori_state!(tu.x_apri, x, F)
+    P_apri = calc_apriori_covariance!(tu.p_apri, tu.fp, P, F, Q)
     KFTimeUpdate(x_apri, P_apri)
 end
 
 function measurement_update(x, P, y, H::Union{Number, AbstractVector, AbstractMatrix}, R)
-    ỹ = y .- H * x
+    ỹ = calc_innovation(H, x, y)
     PHᵀ = P * H'
     S = H * PHᵀ .+ R
-    K = PHᵀ / S
-    x_post = x .+ K * ỹ
-    P_post = calc_posterior_covariance(P, PHᵀ, K)
+    K = calc_kalman_gain(PHᵀ, S)
+    x_post = calc_posterior_state(x, K, ỹ)
+    P_post = (I - K * H) * P
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
+
+calc_innovation(H, x, y) = y .- H * x
+calc_kalman_gain(PHᵀ, S) = PHᵀ / S
+calc_posterior_state(x, K, ỹ) = x .+ K * ỹ
 
 function measurement_update!(
     mu::KFMUIntermediate,
@@ -96,103 +90,43 @@ function measurement_update!(
     ỹ = calc_innovation!(mu.innovation, H, x, y)
     mul!(PHᵀ, P, H')
     S = calc_innovation_covariance!(mu.innovation_covariance, H, PHᵀ, R)
-    K = calc_kalman_gain!(mu.s_lu, mu.kalman_gain, PHᵀ, S)
-    x_post = calc_posterior_state!(x, K, ỹ)
-    P_post = calc_posterior_covariance!(P, PHᵀ, K)
+    K = calc_kalman_gain!(mu.s_chol, mu.kalman_gain, PHᵀ, S)
+    x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)
+    P_post = calc_posterior_covariance!(mu.p_posterior, P, PHᵀ, K)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
-function calc_apriori_state!(x_temp, x, F)
-    mul!(x_temp, F, x)
+function calc_apriori_state!(x_apri, x, F)
+    x_apri .= @~ F * x
 end
 
-function calc_apriori_covariance!(FP, P, F, Q)
-    mul!(FP, F, P)
-    P .= Mul(FP, F') .+ Q
+function calc_apriori_covariance!(P_apri, FP, P, F, Q)
+    FP .= @~ F * P
+    P_apri .= @~ FP * F' + Q
 end
 
-function calc_innovation!(ỹ, H, x::AbstractVector, y::AbstractVector)
-    ỹ .= (-1.) .* Mul(H, x) .+ y # Order is important to trigger BLAS
-end
-
-function calc_innovation!(ỹ, H, x::AbstractVector, y)
-    y - H * x
-end
-
-function calc_innovation!(ỹ, H, x, y::AbstractVector)
-    ỹ .= y .- H .* x
-end
-
-function calc_innovation_covariance!(S, H, PHᵀ, R::AbstractMatrix)
-    S .= Mul(H, PHᵀ) .+ R
-end
-
-# Can be removed once https://github.com/JuliaArrays/LazyArrays.jl/issues/27 is fixed
-function calc_innovation_covariance!(S, H::AbstractVector, PHᵀ, R::AbstractMatrix)
-    mul!(S, H, PHᵀ)
-    S .+= R
+function calc_innovation!(ỹ, H, x, y)
+    ỹ .= @~ -1 * H * x + y # Order is important to trigger BLAS
 end
 
 function calc_innovation_covariance!(S, H, PHᵀ, R)
-    H * PHᵀ + R
+    S .= @~ H * PHᵀ + R
 end
 
-function calc_kalman_gain!(S_lu, K, PHᵀ, S::AbstractMatrix)
-    S_lu .= S
+function calc_kalman_gain!(S_chol, K, PHᵀ, S)
+    S_chol .= S
     K .= PHᵀ
-    rdiv!(K, S_lu)
+    rdiv!(K, cholesky!(Hermitian(S_chol)))
 end
 
-function calc_kalman_gain!(S_lu, K, PHᵀ, S)
-    PHᵀ ./ S
-end
-
-function calc_posterior_state!(x::AbstractVector, K, ỹ::AbstractVector)
-    x .= Mul(K, ỹ) .+ x
-end
-
-function calc_posterior_state!(x::AbstractVector, K, ỹ)
-    x .= K .* ỹ .+ x
-end
-
-function calc_posterior_state!(x, K, ỹ::AbstractVector)
-    K * ỹ + x
+function calc_posterior_state!(x_posterior, x, K, ỹ)
+    x_posterior .= @~ K * ỹ + x
 end
 
 function calc_posterior_covariance(P, PHᵀ, K)
     P .- PHᵀ * K' # (I - K * H) * P ?
 end
 
-function calc_posterior_covariance!(P::AbstractMatrix, PHᵀ, K)
-    P .= (-1.) .* Mul(PHᵀ, K') .+ P
-end
-
-# Can be removed once https://github.com/JuliaArrays/LazyArrays.jl/issues/27 is fixed
-function calc_posterior_covariance!(P::AbstractMatrix, PHᵀ::AbstractVector, K)
-    P .-= PHᵀ * K'
-end
-
-function calc_posterior_covariance!(P, PHᵀ, K)
-    P - PHᵀ * K'
-end
-
-function adjoint!(X)
-    for i = 1:size(X,1), j = i:size(X,2)
-        @inbounds X[i,j], X[j,i] = X[j,i]', X[i,j]'
-    end
-    return X
-end
-
-function rdiv!(A::StridedVecOrMat, B::StridedMatrix)
-    adjoint(ldiv!(adjoint(lu!(B)), adjoint!(A)))
-end
-
-function rdiv!(adjA::Adjoint{<:Any, <:StridedVecOrMat}, B::StridedMatrix)
-    A = adjA.parent
-    adjoint(ldiv!(adjoint(lu!(B)), A))
-end
-
-function rdiv!(transA::Transpose{<:Any, <:StridedVecOrMat}, B::StridedMatrix)
-    A = transA.parent
-    adjoint(ldiv!(adjoint(lu!(B)), A))
+function calc_posterior_covariance!(P_posterior, P, PHᵀ, K)
+    P_posterior .= @~ -1 * PHᵀ * K' + P # Order is important to trigger BLAS
 end
