@@ -1,6 +1,7 @@
-struct SRUKFTUIntermediate{T,TS}
-    P_chol::Matrix{T}
-    xi_temp::Vector{T}
+struct SRUKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T}, Augmented{Matrix{T}, Matrix{T}}}}
+    P_chol::AS
+    xi_temp::X
+    transformed_x0_temp::Vector{T}
     transformed_sigma_points::TS
     unbiased_sigma_points::TS
     qr_zeros::Vector{T}
@@ -11,12 +12,14 @@ struct SRUKFTUIntermediate{T,TS}
 end
 
 function SRUKFTUIntermediate(T::Type, num_x::Number)
+    xi_temp = Vector{T}(undef, num_x)
     qr_zeros = zeros(T, 3 * num_x)
     qr_A = Matrix{T}(undef, 3 * num_x, num_x)
     qr_space_length = calc_gels_working_size(qr_A, qr_zeros)
     SRUKFTUIntermediate(
         Matrix{T}(undef, num_x, num_x),
-        Vector{T}(undef, num_x),
+        xi_temp,
+        xi_temp,
         TransformedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, 2 * num_x), MeanSetWeightingParameters(0.0)), # Weighting parameters will be reset
         TransformedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, 2 * num_x), MeanSetWeightingParameters(0.0)),
         qr_zeros,
@@ -29,9 +32,9 @@ end
 
 SRUKFTUIntermediate(num_x::Number) = SRUKFTUIntermediate(Float64, num_x)
 
-struct SRUKFMUIntermediate{T,TS}
-    P_chol::Matrix{T}
-    xi_temp::Vector{T}
+struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T}, Augmented{Matrix{T}, Matrix{T}}}}
+    P_chol::AS
+    xi_temp::X
     y_est::Vector{T}
     transformed_x0_temp::Vector{T}
     transformed_sigma_points::TS
@@ -157,7 +160,7 @@ function time_update!(tu::SRUKFTUIntermediate, x, P, f!, Q, weight_params::Abstr
     χₖ₍ₖ₋₁₎ = transform!(tu.transformed_sigma_points, tu.xi_temp, f!, χₖ₋₁)
     x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
     unbiased_χₖ₍ₖ₋₁₎ = substract_mean!(tu.unbiased_sigma_points, χₖ₍ₖ₋₁₎, x_apri)
-    P_apri = cov!(tu.p_apri, tu.qr_A, tu.qr_zeros, tu.qr_space, tu.xi_temp, unbiased_χₖ₍ₖ₋₁₎, Q)
+    P_apri = cov!(tu.p_apri, tu.qr_A, tu.qr_zeros, tu.qr_space, tu.transformed_x0_temp, unbiased_χₖ₍ₖ₋₁₎, Q)
     SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
