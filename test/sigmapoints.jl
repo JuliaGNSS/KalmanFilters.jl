@@ -103,7 +103,7 @@
 
         other_weight_params = MeanSetWeightingParameters(0.5)
         𝓨_temp = KalmanFilter.TransformedSigmaPoints(zeros(2), zeros(2,4), other_weight_params)
-        F!(x, y) = x .= y .* 2
+        F!(y, x) = y .= x .* 2
         xi_temp = zeros(length(x))
         𝓨 = @inferred KalmanFilter.transform!(𝓨_temp, xi_temp, F!, χ)
         @test 𝓨 == [ones(2) .* 2 [6 2; 2 6] [-2 2; 2 -2]]

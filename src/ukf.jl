@@ -1,12 +1,6 @@
-struct UKFTimeUpdate{X,P,O} <: AbstractTimeUpdate
-    state::X
-    covariance::P
-    χ::O
-end
-
-struct UKFTUIntermediate{T,TS}
-    P_chol::Matrix{T}
-    xi_temp::Vector{T}
+struct UKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T}, Augmented{Matrix{T}, Matrix{T}}}}
+    P_chol::AS
+    xi_temp::X
     transformed_sigma_points::TS
     unbiased_sigma_points::TS
     x_apri::Vector{T}
@@ -25,18 +19,9 @@ UKFTUIntermediate(T::Type, num_x::Number) =
 
 UKFTUIntermediate(num_x::Number) = UKFTUIntermediate(Float64, num_x)
 
-struct UKFMeasurementUpdate{X,P,O,T,K} <: AbstractMeasurementUpdate
-    state::X
-    covariance::P
-    𝓨::O
-    innovation::Vector{T}
-    innovation_covariance::Matrix{T}
-    kalman_gain::K
-end
-
-struct UKFMUIntermediate{T,TS}
-    P_chol::Matrix{T}
-    xi_temp::Vector{T}
+struct UKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T}, Augmented{Matrix{T}, Matrix{T}}}}
+    P_chol::AS
+    xi_temp::X
     y_est::Vector{T}
     transformed_sigma_points::TS
     unbiased_sigma_points::TS
@@ -68,8 +53,8 @@ end
 
 UKFMUIntermediate(num_x::Number, num_y::Number) = UKFMUIntermediate(Float64, num_x, num_y)
 
-sigmapoints(tu::UKFTimeUpdate) = tu.χ
-sigmapoints(tu::UKFMeasurementUpdate) = tu.𝓨
+sigmapoints(tu::SPTimeUpdate) = tu.χ
+sigmapoints(tu::SPMeasurementUpdate) = tu.𝓨
 
 function time_update(x, P, f, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
     χₖ₋₁ = calc_sigma_points(x, P, weight_params)
@@ -77,7 +62,7 @@ function time_update(x, P, f, Q, weight_params::AbstractWeightingParameters = Wa
     x_apri = mean(χₖ₍ₖ₋₁₎)
     unbiased_χₖ₍ₖ₋₁₎ = substract_mean(χₖ₍ₖ₋₁₎, x_apri)
     P_apri = cov(unbiased_χₖ₍ₖ₋₁₎, Q)
-    UKFTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
+    SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
 function time_update!(tu::UKFTUIntermediate, x, P, f!, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
@@ -86,7 +71,7 @@ function time_update!(tu::UKFTUIntermediate, x, P, f!, Q, weight_params::Abstrac
     x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
     unbiased_χₖ₍ₖ₋₁₎ = substract_mean!(tu.unbiased_sigma_points, χₖ₍ₖ₋₁₎, x_apri)
     P_apri = cov!(tu.p_apri, unbiased_χₖ₍ₖ₋₁₎, Q)
-    UKFTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
+    SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
 function measurement_update(x, P, y, h, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
@@ -97,10 +82,15 @@ function measurement_update(x, P, y, h, R, weight_params::AbstractWeightingParam
     S = cov(unbiased_𝓨, R)
     Pᵪᵧ = cov(χₖ₍ₖ₋₁₎, unbiased_𝓨)
     ỹ = y .- y_est
+    K, P_posterior = calc_kalman_gain_and_posterior_covariance(P, Pᵪᵧ, S)
+    x_posterior = calc_posterior_state(x, K, ỹ)  
+    SPMeasurementUpdate(x_posterior, P_posterior, 𝓨, ỹ, S, K)
+end
+
+function calc_kalman_gain_and_posterior_covariance(P, Pᵪᵧ, S)
     K = Pᵪᵧ / S
-    x_posterior = calc_posterior_state(x, K, ỹ)
     P_posterior = calc_posterior_covariance(P, Pᵪᵧ, K)
-    UKFMeasurementUpdate(x_posterior, P_posterior, 𝓨, ỹ, S, K)
+    K, P_posterior
 end
 
 function measurement_update!(mu::UKFMUIntermediate, x, P, y, h!, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
@@ -111,8 +101,13 @@ function measurement_update!(mu::UKFMUIntermediate, x, P, y, h!, R, weight_param
     S = cov!(mu.innovation_covariance, unbiased_𝓨, R)
     Pᵪᵧ = cov!(mu.cross_covariance, χₖ₍ₖ₋₁₎, unbiased_𝓨)
     mu.ỹ .= y .- y_est
-    K = calc_kalman_gain!(mu.s_chol, mu.kalman_gain, Pᵪᵧ, S)
+    K, P_posterior = calc_kalman_gain_and_posterior_covariance!(mu.s_chol, mu.kalman_gain, mu.p_posterior, P, Pᵪᵧ, S)
     x_posterior = calc_posterior_state!(mu.x_posterior, x, K, mu.ỹ)
-    P_posterior = calc_posterior_covariance!(mu.p_posterior, P, Pᵪᵧ, K)
-    UKFMeasurementUpdate(x_posterior, P_posterior, 𝓨, mu.ỹ, S, K)
+    SPMeasurementUpdate(x_posterior, P_posterior, 𝓨, mu.ỹ, S, K)
+end
+
+function calc_kalman_gain_and_posterior_covariance!(s_chol, kalman_gain, p_post, P, Pᵪᵧ, S)
+    K = calc_kalman_gain!(s_chol, kalman_gain, Pᵪᵧ, S)
+    P_posterior = calc_posterior_covariance!(p_post, P, Pᵪᵧ, K)
+    K, P_posterior
 end

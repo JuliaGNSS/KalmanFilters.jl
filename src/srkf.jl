@@ -1,30 +1,23 @@
-struct SRKFTimeUpdate{X,P} <: AbstractSRTimeUpdate
-    state::X
-    covariance::P
-end
-
-struct SRKFMeasurementUpdate{X,P,R,S,K} <: AbstractSRMeasurementUpdate
-    state::X
-    covariance::P
-    innovation::R
-    innovation_covariance::S
-    kalman_gain::K
-end
-
 struct SRKFTUIntermediate{T}
     x_apri::Vector{T}
     p_apri::Matrix{T}
-    zeros::Vector{T}
+    qr_zeros::Vector{T}
+    qr_space::Vector{T}
     puft_vcat_q::Matrix{T}
 end
 
-SRKFTUIntermediate(T::Type, num_x::Number) =
+function SRKFTUIntermediate(T::Type, num_x::Number)
+    qr_zeros = zeros(T, 2 * num_x)
+    puft_vcat_q = Matrix{T}(undef, 2 * num_x, num_x)
+    qr_space_length = calc_gels_working_size(puft_vcat_q, qr_zeros)
     SRKFTUIntermediate(
         Vector{T}(undef, num_x),
         Matrix{T}(undef, num_x, num_x),
-        zeros(T, 2 * num_x),
-        Matrix{T}(undef, 2 * num_x, num_x)
+        qr_zeros,
+        Vector{T}(undef, qr_space_length),
+        puft_vcat_q
     )
+end
 
 SRKFTUIntermediate(num_x::Number) = SRKFTUIntermediate(Float64, num_x)
 
@@ -33,26 +26,27 @@ function calc_upper_triangular_of_qr!(A)
     R
 end
 
-function calc_upper_triangular_of_qr_inplace!(A, B)
-    R, = LAPACK.gels!('N', A, B)
-    R
+function calc_upper_triangular_of_qr_inplace!(res, A, B, space)
+    mygels!(res, A, B, space)
 end
 
+# This implementation is based on
+# https://github.com/rlabbe/filterpy/blob/master/filterpy/kalman/square_root.py
 function time_update(x, P::Cholesky, F::Union{Number, AbstractMatrix}, Q::Cholesky)
     x_apri = calc_apriori_state(x, F)
     A = vcat(P.U * F', Q.U)
     R = calc_upper_triangular_of_qr!(A)
     P_apri = Cholesky(R, 'U', 0)
-    SRKFTimeUpdate(x_apri, P_apri)
+    KFTimeUpdate(x_apri, P_apri)
 end
 
 function time_update!(tu::SRKFTUIntermediate, x, P::Cholesky, F::Union{Number, AbstractMatrix}, Q::Cholesky)
     x_apri = calc_apriori_state!(tu.x_apri, x, F)
     tu.puft_vcat_q[1:size(F, 1),:] .= @~ P.U * F'
     tu.puft_vcat_q[size(F, 1) + 1:end,:] .= Q.U
-    R = calc_upper_triangular_of_qr_inplace!(tu.puft_vcat_q, tu.zeros)
+    R = calc_upper_triangular_of_qr_inplace!(tu.p_apri, tu.puft_vcat_q, tu.qr_zeros, tu.qr_space)
     P_apri = Cholesky(R, 'U', 0)
-    SRKFTimeUpdate(x_apri, P_apri)
+    KFTimeUpdate(x_apri, P_apri)
 end
 
 function measurement_update(
@@ -75,23 +69,30 @@ function measurement_update(
     K = calc_kalman_gain(PHᵀ, S.L)
     x_post = calc_posterior_state(x, K, ỹ)
     P_post = Cholesky(@view(R[dim_y + 1:end, dim_y + 1:end]), 'U', 0)
-    SRKFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
 struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     innovation::Vector{T}
     kalman_gain::K
     m::Matrix{T}
-    zeros::Vector{T}
+    qr_zeros::Vector{T}
+    qr_space::Vector{T}
+    R::Matrix{T}
     x_posterior::Vector{T}
 end
 
 function SRKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
-    return SRKFMUIntermediate(
+    qr_zeros = zeros(T, num_x + num_y)
+    M = Matrix{T}(undef, num_x + num_y, num_x + num_y)
+    qr_space_length = calc_gels_working_size(M, qr_zeros)
+    SRKFMUIntermediate(
         Vector{T}(undef, num_y),
         Matrix{T}(undef, num_x, num_y),
+        M,
+        qr_zeros,
+        Vector{T}(undef, qr_space_length),
         Matrix{T}(undef, num_x + num_y, num_x + num_y),
-        Vector{T}(undef, num_x + num_y),
         Vector{T}(undef, num_x)
     )
 end
@@ -113,13 +114,13 @@ function measurement_update!(
     M[1:dim_y, 1:dim_y] .= R.U
     M[dim_y + 1:end, 1:dim_y] .= @~ P.U * H'
     M[dim_y + 1:end, dim_y + 1:end] .= P.U
-    R = calc_upper_triangular_of_qr_inplace!(M, mu.zeros)
+    R = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_zeros, mu.qr_space)
     PHᵀ = transpose(@view(R[1:dim_y, dim_y + 1:end]))
     S = Cholesky(@view(R[1:dim_y, 1:dim_y]), 'U', 0)
     K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, S.L)
     x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)
     P_post = Cholesky(@view(R[dim_y + 1:end, dim_y + 1:end]), 'U', 0)
-    SRKFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
 function calc_kalman_gain!(K, PHᵀ, SL::LowerTriangular)
