@@ -25,12 +25,14 @@ module KalmanFilter
         KFTUIntermediate,
         SRKFTUIntermediate,
         SRUKFTUIntermediate,
+        SRAUKFTUIntermediate,
         AUKFTUIntermediate,
         UKFTUIntermediate,
         KFMUIntermediate,
         SRKFMUIntermediate,
         UKFMUIntermediate,
         SRUKFMUIntermediate,
+        SRAUKFMUIntermediate,
         AUKFMUIntermediate,
         get_state,
         get_covariance,
@@ -95,8 +97,7 @@ module KalmanFilter
     include("ukf.jl")
     include("srukf.jl")
     include("aukf.jl")
-#    include("srukf.jl")
-#    include("sraukf.jl")
+    include("sraukf.jl")
     include("tests.jl")
 
 end

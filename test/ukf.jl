@@ -35,13 +35,13 @@
         h(x) = H * x
 
         mu = measurement_update(x, P, y, H, R)
-        mu_ukf = measurement_update(x, P, y, h, R)
+        mu_ukf = @inferred measurement_update(x, P, y, h, R)
         @test get_covariance(mu_ukf) ≈ get_covariance(mu)
         @test get_state(mu_ukf) ≈ get_state(mu)
 
         h!(y, x) = mul!(y, H, x)
-        mu_inter = UKFMUIntermediate(6, 3)
-        mu_ukf_inplace = measurement_update!(mu_inter, x, P, y, h!, R)
+        mu_inter = @inferred UKFMUIntermediate(6, 3)
+        mu_ukf_inplace = @inferred measurement_update!(mu_inter, x, P, y, h!, R)
         @test get_covariance(mu_ukf_inplace) ≈ get_covariance(mu)
         @test get_state(mu_ukf_inplace) ≈ get_state(mu)
     end
