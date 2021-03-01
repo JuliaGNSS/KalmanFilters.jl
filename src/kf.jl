@@ -1,4 +1,4 @@
-struct KFTimeUpdate{X,P} <: AbstractTimeUpdate
+struct KFTimeUpdate{X,P} <: AbstractTimeUpdate{X,P}
     state::X
     covariance::P
 end
@@ -18,7 +18,7 @@ KFTUIntermediate(T::Type, num_x::Number) =
 
 KFTUIntermediate(num_x::Number) = KFTUIntermediate(Float64, num_x)
 
-struct KFMeasurementUpdate{X,P,R,S,K} <: AbstractMeasurementUpdate
+struct KFMeasurementUpdate{X,P,R,S,K} <: AbstractMeasurementUpdate{X,P}
     state::X
     covariance::P
     innovation::R
@@ -58,7 +58,7 @@ end
 
 calc_apriori_state(x, F) = F * x
 
-function time_update!(tu::KFTUIntermediate, x, P, F::Union{Number, AbstractMatrix}, Q)
+function time_update!(tu::KFTUIntermediate, x, P, F::AbstractMatrix, Q)
     x_apri = calc_apriori_state!(tu.x_apri, x, F)
     P_apri = calc_apriori_covariance!(tu.p_apri, tu.fp, P, F, Q)
     KFTimeUpdate(x_apri, P_apri)
@@ -78,14 +78,7 @@ calc_innovation(H, x, y) = y .- H * x
 calc_kalman_gain(PHᵀ, S) = PHᵀ / S
 calc_posterior_state(x, K, ỹ) = x .+ K * ỹ
 
-function measurement_update!(
-    mu::KFMUIntermediate,
-    x,
-    P,
-    y,
-    H::Union{Number, AbstractVector, AbstractMatrix},
-    R
-)
+function measurement_update!(mu::KFMUIntermediate, x, P, y, H::AbstractMatrix, R)
     PHᵀ = mu.pht
     ỹ = calc_innovation!(mu.innovation, H, x, y)
     mul!(PHᵀ, P, H')
