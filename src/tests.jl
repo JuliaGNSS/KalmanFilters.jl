@@ -62,10 +62,10 @@ Normalized innovation squared (NIS)
 
 Returns NIS-value for a single innovation sequence `seq` and its variance `var`
 """
-function nis(seq, var)
+function calc_nis(seq, var)
     dot(seq, var \ seq)
 end
 
-function nis(seq, var::Cholesky)
-    seq' / var.U / var.L * seq
+function calc_nis(mu::AbstractMeasurementUpdate)
+    calc_nis(get_innovation(mu), mu.innovation_covariance)
 end

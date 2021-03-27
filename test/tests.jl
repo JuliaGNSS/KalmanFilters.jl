@@ -3,23 +3,23 @@
 
     unbiased_innos_scalar = randn(num_samples) .* sqrt(2)
     unbiased_variance_scalar = ones(num_samples) .* 2
-    nis_over_time_us = map((x, σ²) -> nis(x, σ²), unbiased_innos_scalar, unbiased_variance_scalar)
+    nis_over_time_us = map((x, σ²) -> calc_nis(x, σ²), unbiased_innos_scalar, unbiased_variance_scalar)
     @test nis_test(nis_over_time_us, num_samples) == true
 
     biased_innos_scalar = randn(num_samples) .* sqrt(2) .+ 1
     biased_variance_scalar = ones(num_samples) .* 2
-    nis_over_time_bs = map((x, σ²) -> nis(x, σ²), biased_innos_scalar, biased_variance_scalar)
+    nis_over_time_bs = map((x, σ²) -> calc_nis(x, σ²), biased_innos_scalar, biased_variance_scalar)
     @test nis_test(nis_over_time_bs, num_samples) == false
 
     unbiased_innos = [randn(2) .* sqrt(2) for i = 1:num_samples]
     unbiased_variance = fill(Matrix{Float64}(I, 2, 2) .* 2, num_samples)
-    nis_over_time_uv = map((x, σ²) -> nis(x, σ²), unbiased_innos, unbiased_variance)
+    nis_over_time_uv = map((x, σ²) -> calc_nis(x, σ²), unbiased_innos, unbiased_variance)
     dof_uv = num_samples * 2
     @test nis_test(nis_over_time_uv, dof_uv) == true
 
     biased_innos = [randn(2) .* sqrt(2) .+ 1 for i = 1:num_samples]
     biased_variance = fill(Matrix{Float64}(I, 2, 2) .* 2, num_samples)
-    nis_over_time_bv = map((x, σ²) -> nis(x, σ²), biased_innos, biased_variance)
+    nis_over_time_bv = map((x, σ²) -> calc_nis(x, σ²), biased_innos, biased_variance)
     dof_bv = num_samples * 2
     @test nis_test(nis_over_time_bv, dof_bv) == false
 
@@ -27,7 +27,7 @@
     P = A'A
     P_chol = cholesky(P)
     x = randn(4)
-    @test nis(x, P) ≈ nis(x, P_chol)
+    @test calc_nis(x, P) ≈ calc_nis(x, P_chol)
 end
 
 @testset "σ bound test" begin

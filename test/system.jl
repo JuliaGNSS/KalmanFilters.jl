@@ -62,7 +62,7 @@
     window_length = 400
     window = window_start:window_start + window_length - 1
     dof = length(window) * size(ỹ_over_time[window_start], 1)
-    nis_over_time_sys = map((x, σ²) -> nis(x, σ²), ỹ_over_time[window], S_over_time[window])
+    nis_over_time_sys = map((x, σ²) -> calc_nis(x, σ²), ỹ_over_time[window], S_over_time[window])
     result_nis_test = nis_test(nis_over_time_sys, dof)
     @test result_nis_test == true
 end

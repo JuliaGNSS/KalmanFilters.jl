@@ -45,7 +45,7 @@ module KalmanFilter
         time_update!,
         measurement_update,
         measurement_update!,
-        nis,
+        calc_nis,
         nis_test,
         sigma_bound_test,
         two_sigma_bound_test
