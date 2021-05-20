@@ -56,7 +56,7 @@ UKFMUIntermediate(num_x::Number, num_y::Number) = UKFMUIntermediate(Float64, num
 sigmapoints(tu::SPTimeUpdate) = tu.χ
 sigmapoints(tu::SPMeasurementUpdate) = tu.𝓨
 
-function time_update(x, P, f, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function time_update(x, P, f, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     χₖ₋₁ = calc_sigma_points(x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform(f, χₖ₋₁)
     x_apri = mean(χₖ₍ₖ₋₁₎)
@@ -65,7 +65,7 @@ function time_update(x, P, f, Q, weight_params::AbstractWeightingParameters = Wa
     SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
-function time_update!(tu::UKFTUIntermediate, x, P, f!, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function time_update!(tu::UKFTUIntermediate, x, P, f!, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     χₖ₋₁ = calc_sigma_points!(tu.P_chol, x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform!(tu.transformed_sigma_points, tu.xi_temp, f!, χₖ₋₁)
     x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
@@ -74,14 +74,14 @@ function time_update!(tu::UKFTUIntermediate, x, P, f!, Q, weight_params::Abstrac
     SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
-function measurement_update(x, P, y, h, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function measurement_update(x, P, y, h, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     χₖ₍ₖ₋₁₎ = calc_sigma_points(x, P, weight_params)
     𝓨 = transform(h, χₖ₍ₖ₋₁₎)
     y_est = mean(𝓨)
     unbiased_𝓨 = substract_mean(𝓨, y_est)
     S = cov(unbiased_𝓨, R)
-    Pᵪᵧ = cov(χₖ₍ₖ₋₁₎, unbiased_𝓨)
     ỹ = y .- y_est
+    Pᵪᵧ = cov(χₖ₍ₖ₋₁₎, unbiased_𝓨)
     K, P_posterior = calc_kalman_gain_and_posterior_covariance(P, Pᵪᵧ, S)
     x_posterior = calc_posterior_state(x, K, ỹ)  
     SPMeasurementUpdate(x_posterior, P_posterior, 𝓨, ỹ, S, K)

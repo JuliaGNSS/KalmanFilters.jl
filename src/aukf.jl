@@ -43,18 +43,18 @@ function calc_kalman_gain_and_posterior_covariance!(s_chol, kalman_gain, p_post,
     K, P_posterior
 end
 
-function time_update(x, P::Union{<:AbstractMatrix, <:Cholesky}, f, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function time_update(x, P::Union{<:AbstractMatrix, <:Cholesky}, f, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     time_update(x, Augmented(P, Q), f, Q, weight_params)
 end
 
-function time_update!(tu::UKFTUIntermediate, x, P::Union{<:AbstractMatrix, <:Cholesky}, f!, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function time_update!(tu::UKFTUIntermediate, x, P::Union{<:AbstractMatrix, <:Cholesky}, f!, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     time_update!(tu, x, Augmented(P, Q), f!, Q, weight_params)
 end
 
-function measurement_update(x, P::Union{<:AbstractMatrix, <:Cholesky}, y, h, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function measurement_update(x, P::Union{<:AbstractMatrix, <:Cholesky}, y, h, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     measurement_update(x, Augmented(P, R), y, h, R, weight_params)
 end
 
-function measurement_update!(mu::UKFMUIntermediate, x, P::Union{<:AbstractMatrix, <:Cholesky}, y, h!, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0))
+function measurement_update!(mu::UKFMUIntermediate, x, P::Union{<:AbstractMatrix, <:Cholesky}, y, h!, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     measurement_update!(mu, x, Augmented(P, R), y, h!, R, weight_params)
 end

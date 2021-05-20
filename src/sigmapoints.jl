@@ -4,18 +4,86 @@ struct WanMerweWeightingParameters <: AbstractWeightingParameters
     κ::Float64
 end
 
+function WanMerweWeightingParameters()
+    WanMerweWeightingParameters(1e-3, 2, 0)
+end
+
 struct MeanSetWeightingParameters <: AbstractWeightingParameters
     ω₀::Float64
+end
+
+function MeanSetWeightingParameters()
+    MeanSetWeightingParameters(1/3)
 end
 
 struct GaussSetWeightingParameters <: AbstractWeightingParameters
     κ::Float64
 end
 
+function GaussSetWeightingParameters()
+    GaussSetWeightingParameters(3)
+end
+
 struct ScaledSetWeightingParameters <: AbstractWeightingParameters
     α::Float64
     β::Float64
     κ::Float64
+end
+
+function ScaledSetWeightingParameters()
+    ScaledSetWeightingParameters(1e-3, 2.0, 1.0)
+end
+
+lambda(weight_params::WanMerweWeightingParameters, L) = weight_params.α^2 * (L + weight_params.κ) - L
+
+function calc_mean_weights(weight_params::WanMerweWeightingParameters, num_states)
+    λ = lambda(weight_params, num_states)
+    weight_0 = λ / (num_states + λ)
+    weight_i = 1 / (2 * (num_states + λ))
+    weight_0, weight_i
+end
+
+function calc_cov_weights(weight_params::WanMerweWeightingParameters, num_states)
+    weight_0, weight_i = calc_mean_weights(weight_params, num_states)
+    weight_0 + 1 - weight_params.α^2 + weight_params.β, weight_i
+end
+
+function calc_cholesky_weight(weight_params::WanMerweWeightingParameters, num_states::Real)
+    num_states + lambda(weight_params, num_states)
+end
+
+function calc_mean_weights(weight_params::ScaledSetWeightingParameters, num_states)
+    weight_0 = (weight_params.α^2 * weight_params.κ - num_states) / (weight_params.α^2 * weight_params.κ)
+    weight_i = 1 / (2 * weight_params.α^2 * weight_params.κ)
+    weight_0, weight_i
+end
+
+function calc_cov_weights(weight_params::ScaledSetWeightingParameters, num_states)
+    weight_0, weight_i = calc_mean_weights(weight_params, num_states)
+    weight_0 + 1 - weight_params.α^2 + weight_params.β, weight_i
+end
+
+function calc_cholesky_weight(weight_params::ScaledSetWeightingParameters, num_states::Real)
+    weight_params.α^2 * weight_params.κ
+end
+
+function calc_mean_weights(weight_params::MeanSetWeightingParameters, num_states)
+    weight_params.ω₀, (1 - weight_params.ω₀) / (2 * num_states)
+end
+
+calc_cov_weights(weight_params::AbstractWeightingParameters, num_states) =
+    calc_mean_weights(weight_params, num_states)
+
+function calc_cholesky_weight(weight_params::MeanSetWeightingParameters, num_states::Real)
+    num_states / (1 - weight_params.ω₀)
+end
+
+function calc_mean_weights(weight_params::GaussSetWeightingParameters, num_states)
+    1 - num_states / weight_params.κ, 1 / (2 * weight_params.κ)
+end
+
+function calc_cholesky_weight(weight_params::GaussSetWeightingParameters, num_states::Real)
+    weight_params.κ
 end
 
 struct SPTimeUpdate{X,P,O} <: AbstractTimeUpdate{X,P}
@@ -183,61 +251,6 @@ function mean_and_cov(𝓨::TransformedSigmaPoints, Q)
     y = mean(𝓨)
     Ryy = cov(𝓨 .- y, Q)
     y, Ryy
-end
-
-lambda(weight_params::WanMerweWeightingParameters, L) = weight_params.α^2 * (L + weight_params.κ) - L
-
-function calc_mean_weights(weight_params::WanMerweWeightingParameters, num_states)
-    λ = lambda(weight_params, num_states)
-    weight_0 = λ / (num_states + λ)
-    weight_i = 1 / (2 * (num_states + λ))
-    weight_0, weight_i
-end
-
-function calc_cov_weights(weight_params::WanMerweWeightingParameters, num_states)
-    weight_0, weight_i = calc_mean_weights(weight_params, num_states)
-    weight_0 + 1 - weight_params.α^2 + weight_params.β, weight_i
-end
-
-function calc_cholesky_weight(weight_params::WanMerweWeightingParameters, num_states::Real)
-    num_states + lambda(weight_params, num_states)
-end
-
-function calc_mean_weights(weight_params::MeanSetWeightingParameters, num_states)
-    weight_params.ω₀, (1 - weight_params.ω₀) / (2 * num_states)
-end
-
-calc_cov_weights(weight_params::MeanSetWeightingParameters, num_states) =
-    calc_mean_weights(weight_params, num_states)
-
-function calc_cholesky_weight(weight_params::MeanSetWeightingParameters, num_states::Real)
-    num_states / (1 - weight_params.ω₀)
-end
-
-function calc_mean_weights(weight_params::GaussSetWeightingParameters, num_states)
-    1 - num_states / weight_params.κ, 1 / (2 * weight_params.κ)
-end
-
-calc_cov_weights(weight_params::GaussSetWeightingParameters, num_states) =
-    calc_mean_weights(weight_params, num_states)
-
-function calc_cholesky_weight(weight_params::GaussSetWeightingParameters, num_states::Real)
-    weight_params.κ
-end
-
-function calc_mean_weights(weight_params::ScaledSetWeightingParameters, num_states)
-    weight_0 = (weight_params.α^2 * weight_params.κ - num_states) / (weight_params.α^2 * weight_params.κ)
-    weight_i = 1 / (2 * weight_params.α^2 * weight_params.κ)
-    weight_0, weight_i
-end
-
-function calc_cov_weights(weight_params::ScaledSetWeightingParameters, num_states)
-    weight_0, weight_i = calc_mean_weights(weight_params, num_states)
-    weight_0 + 1 - weight_params.α^2 + weight_params.β, weight_i
-end
-
-function calc_cholesky_weight(weight_params::ScaledSetWeightingParameters, num_states::Real)
-    weight_params.α^2 * weight_params.κ
 end
 
 function calc_mean_weights(χ::AbstractSigmaPoints)
