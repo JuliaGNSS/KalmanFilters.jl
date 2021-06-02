@@ -44,10 +44,10 @@ end
 
 SRAUKFMUIntermediate(num_x::Number, num_y::Number) = SRAUKFMUIntermediate(Float64, num_x, num_y)
 
-function time_update!(tu::SRUKFTUIntermediate, x, P::Union{<:AbstractMatrix, <:Cholesky}, f!, Q::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
-    time_update!(tu, x, Augmented(P, Q), f!, Q, weight_params)
+function time_update!(tu::SRUKFTUIntermediate, x, P::Union{<:AbstractMatrix, <:Cholesky}, f!, Q::Augment; weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
+    time_update!(tu, x, Augmented(P, Q), f!, Q, weight_params = weight_params)
 end
 
-function measurement_update!(mu::SRUKFMUIntermediate, x, P::Union{<:AbstractMatrix, <:Cholesky}, y, h!, R::Augment, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
-    measurement_update!(mu, x, Augmented(P, R), y, h!, R, weight_params)
+function measurement_update!(mu::SRUKFMUIntermediate, x, P::Union{<:AbstractMatrix, <:Cholesky}, y, h!, R::Augment; weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
+    measurement_update!(mu, x, Augmented(P, R), y, h!, R, weight_params = weight_params)
 end

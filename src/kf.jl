@@ -65,22 +65,22 @@ function time_update!(tu::KFTUIntermediate, x, P, F::AbstractMatrix, Q)
     KFTimeUpdate(x_apri, P_apri)
 end
 
-function measurement_update(x, P, y, H::Union{Number, AbstractVector, AbstractMatrix}, R)
+function measurement_update(x, P, y, H::Union{Number, AbstractVector, AbstractMatrix}, R; consider = nothing)
     ỹ = calc_innovation(H, x, y)
     PHᵀ = calc_P_xy(P, H)
     S = calc_innovation_covariance(H, P, R)
-    K = calc_kalman_gain(PHᵀ, S)
-    x_post = calc_posterior_state(x, K, ỹ)
-    P_post = calc_posterior_covariance(P, PHᵀ, K)
+    K = calc_kalman_gain(PHᵀ, S, consider)
+    x_post = calc_posterior_state(x, K, ỹ, consider)
+    P_post = calc_posterior_covariance(P, PHᵀ, K, consider)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
 @inline calc_P_xy(P, H) = P * H'
 @inline calc_innovation(H, x, y) = y .- H * x
 @inline calc_innovation_covariance(H, P, R) = H * P * H' .+ R
-@inline calc_kalman_gain(PHᵀ, S) = PHᵀ / S
-@inline calc_posterior_state(x, K, ỹ) = x .+ K * ỹ
-@inline calc_posterior_covariance(P, PHᵀ, K) = P .- PHᵀ * K' # (I - K * H) * P ?
+@inline calc_kalman_gain(PHᵀ, S, consider::Nothing) = PHᵀ / S
+@inline calc_posterior_state(x, K, ỹ, consider::Nothing) = x .+ K * ỹ
+@inline calc_posterior_covariance(P, PHᵀ, K, consider::Nothing) = P .- PHᵀ * K' # (I - K * H) * P ?
 
 function measurement_update!(mu::KFMUIntermediate, x, P, y, H::AbstractMatrix, R)
     ỹ = calc_innovation!(mu.innovation, H, x, y)

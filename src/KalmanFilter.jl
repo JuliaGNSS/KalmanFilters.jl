@@ -5,7 +5,8 @@ module KalmanFilter
         Distributions,
         LinearAlgebra,
         LazyArrays,
-        Statistics
+        Statistics,
+        InvertedIndices
 
     const liblapack = Base.liblapack_name
     

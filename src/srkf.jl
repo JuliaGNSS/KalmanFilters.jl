@@ -56,35 +56,40 @@ function measurement_update(
     P::Cholesky,
     y,
     H::Union{Number, AbstractVector, AbstractMatrix},
-    R::Cholesky
+    R::Cholesky;
+    consider = nothing
 )
-    typeof(x) <: ConsideredState && @warn "The lower right part of P (P_cc - the considered part) is not calculated correctly. Please check the algorithm."
     ỹ = calc_innovation(H, x, y)
-    PHᵀ, S, P_post = calc_cross_cov_innovation_posterior(P, H, R)
-    K = calc_kalman_gain(PHᵀ, S.L)
-    x_post = calc_posterior_state(x, K, ỹ)
+    PHᵀ, S, P_post = calc_cross_cov_innovation_posterior(P, H, R, consider)
+    K = calc_kalman_gain(PHᵀ, S.L, consider)
+    x_post = calc_posterior_state(x, K, ỹ, consider)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
 function create_matrix_for_qr(P::Cholesky, H, R::Cholesky)
-    dim_y = size(R, 1)
-    dim_x = size(P, 1)
-    M = zeros(dim_y + dim_x, dim_y + dim_x)
-    M[1:dim_y, 1:dim_y] .= R.U
-    M[dim_y + 1:end, 1:dim_y] .= P.U * H'
-    M[dim_y + 1:end, dim_y + 1:end] .= P.U
+    num_y = size(R, 1)
+    num_x = size(P, 1)
+    M = zeros(num_y + num_x, num_y + num_x)
+    M[1:num_y, 1:num_y] .= R.U
+    M[num_y + 1:end, 1:num_y] .= P.U * H'
+    M[num_y + 1:end, num_y + 1:end] .= P.U
     M
 end
 
-function calc_cross_cov_innovation_posterior(P::Cholesky, H, R::Cholesky)
-    dim_y = size(R, 1)
+function calc_cross_cov_innovation_posterior(P::Cholesky, H, R::Cholesky, consider)
+    num_y = size(R, 1)
     M = create_matrix_for_qr(P, H, R)
     RU = calc_upper_triangular_of_qr!(M)
-    PHᵀ = transpose(RU[1:dim_y, dim_y + 1:end])
-    S = Cholesky(RU[1:dim_y, 1:dim_y], 'U', 0)
-    P_post = Cholesky(RU[dim_y + 1:end, dim_y + 1:end], 'U', 0)
+    PHᵀ = extract_cross_covariance(RU, num_y)
+    S = extract_innovation_covariance(RU, num_y)
+    P_post = extract_posterior_covariance(RU, num_y, P, consider)
     PHᵀ, S, P_post
 end
+
+@inline extract_cross_covariance(RU, num_y) = transpose(RU[1:num_y, num_y + 1:end])
+@inline extract_innovation_covariance(RU, num_y) = Cholesky(RU[1:num_y, 1:num_y], 'U', 0)
+@inline extract_posterior_covariance(RU, num_y, P, consider::Nothing) =
+    Cholesky(RU[num_y + 1:end, num_y + 1:end], 'U', 0)
 
 struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     innovation::Vector{T}

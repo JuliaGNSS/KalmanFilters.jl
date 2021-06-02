@@ -35,9 +35,9 @@
         S_chol = KalmanFilter.cov(unbiased_𝓨, R_chol)
         Pᵪᵧ = KalmanFilter.cov(χ, unbiased_𝓨)
         K = Pᵪᵧ / S_chol
-        K_temp, P_post = @inferred KalmanFilter.calc_kalman_gain_and_posterior_covariance(P_chol, Pᵪᵧ, S_chol)
+        K_temp, P_post = @inferred KalmanFilter.calc_kalman_gain_and_posterior_covariance(P_chol, Pᵪᵧ, S_chol, [])
         @test K_temp ≈ K
-        @test P_post.L * P_post.U ≈ KalmanFilter.calc_posterior_covariance(P, Pᵪᵧ, K)
+        @test P_post.L * P_post.U ≈ KalmanFilter.calc_posterior_covariance(P, Pᵪᵧ, K, [])
     end
 
     @testset "Time update" begin

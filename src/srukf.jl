@@ -131,7 +131,7 @@ function cov!(res, qr_A, qr_zeros, qr_space, x0_temp, χ::TransformedSigmaPoints
     S
 end
 
-function calc_kalman_gain_and_posterior_covariance(P::Cholesky, Pᵪᵧ, S::Cholesky)
+function calc_kalman_gain_and_posterior_covariance(P::Cholesky, Pᵪᵧ, S::Cholesky, consider::Nothing)
     U = S.uplo === 'U' ? Pᵪᵧ / S.U : Pᵪᵧ / transpose(S.L)
     K = S.uplo === 'U' ? U / transpose(S.U) : U / S.L
     P_post = reduce(lowrankdowndate, eachcol(U), init = P)
@@ -147,15 +147,15 @@ function calc_kalman_gain_and_posterior_covariance!(U, P_post, P::Cholesky, Pᵪ
     K, P_chol
 end
 
-function calc_kalman_gain_and_posterior_covariance(P::Augmented{<:Cholesky}, Pᵪᵧ, S::Cholesky)
-    calc_kalman_gain_and_posterior_covariance(P.P, Pᵪᵧ, S)
+function calc_kalman_gain_and_posterior_covariance(P::Augmented{<:Cholesky}, Pᵪᵧ, S::Cholesky, consider)
+    calc_kalman_gain_and_posterior_covariance(P.P, Pᵪᵧ, S, consider)
 end
 
 function calc_kalman_gain_and_posterior_covariance!(U, P_post, P::Augmented{<:Cholesky}, Pᵪᵧ, S::Cholesky)
     calc_kalman_gain_and_posterior_covariance!(U, P_post, P.P, Pᵪᵧ, S)
 end
 
-function time_update!(tu::SRUKFTUIntermediate, x, P, f!, Q, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
+function time_update!(tu::SRUKFTUIntermediate, x, P, f!, Q; weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     χₖ₋₁ = calc_sigma_points!(tu.P_chol, x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform!(tu.transformed_sigma_points, tu.xi_temp, f!, χₖ₋₁)
     x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
@@ -164,7 +164,7 @@ function time_update!(tu::SRUKFTUIntermediate, x, P, f!, Q, weight_params::Abstr
     SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
-function measurement_update!(mu::SRUKFMUIntermediate, x, P, y, h!, R, weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
+function measurement_update!(mu::SRUKFMUIntermediate, x, P, y, h!, R; weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
     χₖ₍ₖ₋₁₎ = calc_sigma_points!(mu.P_chol, x, P, weight_params)
     𝓨 = transform!(mu.transformed_sigma_points, mu.xi_temp, h!, χₖ₍ₖ₋₁₎)
     y_est = mean!(mu.y_est, 𝓨)
