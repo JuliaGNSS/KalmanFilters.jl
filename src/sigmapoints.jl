@@ -267,7 +267,7 @@ end
 
 Base.size(S::SigmaPoints) = (length(S.x0), 2 * length(S.x0) + 1)
 
-Base.getindex(S::SigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
+Base.getindex(S::SigmaPoints, inds::Vararg{Int,2}) =
     @inbounds if inds[2] == 1
         S.x0[inds[1]]
     elseif 1 < inds[2] <= length(S.x0) + 1

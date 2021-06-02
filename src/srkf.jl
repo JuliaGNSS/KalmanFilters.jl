@@ -32,12 +32,14 @@ end
 
 # This implementation is based on
 # https://github.com/rlabbe/filterpy/blob/master/filterpy/kalman/square_root.py
-function time_update(x, P::Cholesky, F::Union{Number, AbstractMatrix}, Q::Cholesky)
-    x_apri = calc_apriori_state(x, F)
+@inline function calc_apriori_covariance(
+    P::Cholesky,
+    F::Union{Number, AbstractMatrix},
+    Q::Cholesky
+)
     A = vcat(P.U * F', Q.U)
     R = calc_upper_triangular_of_qr!(A)
-    P_apri = Cholesky(R, 'U', 0)
-    KFTimeUpdate(x_apri, P_apri)
+    Cholesky(R, 'U', 0)
 end
 
 function time_update!(tu::SRKFTUIntermediate, x, P::Cholesky, F::Union{Number, AbstractMatrix}, Q::Cholesky)
@@ -56,20 +58,32 @@ function measurement_update(
     H::Union{Number, AbstractVector, AbstractMatrix},
     R::Cholesky
 )
+    typeof(x) <: ConsideredState && @warn "The lower right part of P (P_cc - the considered part) is not calculated correctly. Please check the algorithm."
     ỹ = calc_innovation(H, x, y)
-    dim_y = length(y)
-    dim_x = length(x)
-    M = zeros(dim_y + dim_x, dim_y + dim_x)
-    M[1:dim_y, 1:dim_y] .= R.U
-    M[dim_y + 1:end, 1:dim_y] .= (H * P.L)'
-    M[dim_y + 1:end, dim_y + 1:end] .= P.U
-    R = calc_upper_triangular_of_qr!(M)
-    PHᵀ = transpose(@view(R[1:dim_y, dim_y + 1:end]))
-    S = Cholesky(@view(R[1:dim_y, 1:dim_y]), 'U', 0)
+    PHᵀ, S, P_post = calc_cross_cov_innovation_posterior(P, H, R)
     K = calc_kalman_gain(PHᵀ, S.L)
     x_post = calc_posterior_state(x, K, ỹ)
-    P_post = Cholesky(@view(R[dim_y + 1:end, dim_y + 1:end]), 'U', 0)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+end
+
+function create_matrix_for_qr(P::Cholesky, H, R::Cholesky)
+    dim_y = size(R, 1)
+    dim_x = size(P, 1)
+    M = zeros(dim_y + dim_x, dim_y + dim_x)
+    M[1:dim_y, 1:dim_y] .= R.U
+    M[dim_y + 1:end, 1:dim_y] .= P.U * H'
+    M[dim_y + 1:end, dim_y + 1:end] .= P.U
+    M
+end
+
+function calc_cross_cov_innovation_posterior(P::Cholesky, H, R::Cholesky)
+    dim_y = size(R, 1)
+    M = create_matrix_for_qr(P, H, R)
+    RU = calc_upper_triangular_of_qr!(M)
+    PHᵀ = transpose(RU[1:dim_y, dim_y + 1:end])
+    S = Cholesky(RU[1:dim_y, 1:dim_y], 'U', 0)
+    P_post = Cholesky(RU[dim_y + 1:end, dim_y + 1:end], 'U', 0)
+    PHᵀ, S, P_post
 end
 
 struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
@@ -109,17 +123,16 @@ function measurement_update!(
 )
     ỹ = calc_innovation!(mu.innovation, H, x, y)
     dim_y = length(y)
-    dim_x = length(x)
     M = mu.m
     M[1:dim_y, 1:dim_y] .= R.U
     M[dim_y + 1:end, 1:dim_y] .= @~ P.U * H'
     M[dim_y + 1:end, dim_y + 1:end] .= P.U
-    R = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_zeros, mu.qr_space)
-    PHᵀ = transpose(@view(R[1:dim_y, dim_y + 1:end]))
-    S = Cholesky(@view(R[1:dim_y, 1:dim_y]), 'U', 0)
+    RU = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_zeros, mu.qr_space)
+    PHᵀ = transpose(@view(RU[1:dim_y, dim_y + 1:end]))
+    S = Cholesky(@view(RU[1:dim_y, 1:dim_y]), 'U', 0)
     K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, S.L)
     x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)
-    P_post = Cholesky(@view(R[dim_y + 1:end, dim_y + 1:end]), 'U', 0)
+    P_post = Cholesky(@view(RU[dim_y + 1:end, dim_y + 1:end]), 'U', 0)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 

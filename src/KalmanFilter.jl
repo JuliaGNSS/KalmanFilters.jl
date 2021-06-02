@@ -14,7 +14,7 @@ module KalmanFilter
     import ..LinearAlgebra.BLAS.@blasfunc
 
     import ..LinearAlgebra: BlasFloat, BlasInt,
-        DimensionMismatch, chkstride1, checksquare
+        DimensionMismatch, chkstride1, checksquare, cholesky
 
     export
         WanMerweWeightingParameters,
@@ -48,7 +48,11 @@ module KalmanFilter
         calc_nis,
         nis_test,
         sigma_bound_test,
-        two_sigma_bound_test
+        two_sigma_bound_test,
+        ConsideredState,
+        ConsideredCovariance,
+        ConsideredMeasurementModel,
+        ConsideredProcessModel
 
     abstract type AbstractUpdate{X,P} end
     abstract type AbstractTimeUpdate{X,P} <: AbstractUpdate{X,P} end
@@ -98,6 +102,7 @@ module KalmanFilter
     include("srukf.jl")
     include("aukf.jl")
     include("sraukf.jl")
+    include("consider.jl")
     include("tests.jl")
 
 end

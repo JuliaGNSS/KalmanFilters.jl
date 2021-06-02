@@ -50,13 +50,14 @@ end
 
 KFMUIntermediate(num_x::Number, num_y::Number) = KFMUIntermediate(Float64, num_x, num_y)
 
+calc_apriori_state(x, F) = F * x
+calc_apriori_covariance(P, F, Q) = F * P * F' .+ Q
+
 function time_update(x, P, F::Union{Number, AbstractMatrix}, Q)
     x_apri = calc_apriori_state(x, F)
-    P_apri = F * P * F' .+ Q
+    P_apri = calc_apriori_covariance(P, F, Q)
     KFTimeUpdate(x_apri, P_apri)
 end
-
-calc_apriori_state(x, F) = F * x
 
 function time_update!(tu::KFTUIntermediate, x, P, F::AbstractMatrix, Q)
     x_apri = calc_apriori_state!(tu.x_apri, x, F)
@@ -66,27 +67,34 @@ end
 
 function measurement_update(x, P, y, H::Union{Number, AbstractVector, AbstractMatrix}, R)
     ỹ = calc_innovation(H, x, y)
-    PHᵀ = P * H'
-    S = H * PHᵀ .+ R
+    PHᵀ = calc_P_xy(P, H)
+    S = calc_innovation_covariance(H, P, R)
     K = calc_kalman_gain(PHᵀ, S)
     x_post = calc_posterior_state(x, K, ỹ)
-    P_post = (I - K * H) * P
+    P_post = calc_posterior_covariance(P, PHᵀ, K)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
-calc_innovation(H, x, y) = y .- H * x
-calc_kalman_gain(PHᵀ, S) = PHᵀ / S
-calc_posterior_state(x, K, ỹ) = x .+ K * ỹ
+@inline calc_P_xy(P, H) = P * H'
+@inline calc_innovation(H, x, y) = y .- H * x
+@inline calc_innovation_covariance(H, P, R) = H * P * H' .+ R
+@inline calc_kalman_gain(PHᵀ, S) = PHᵀ / S
+@inline calc_posterior_state(x, K, ỹ) = x .+ K * ỹ
+@inline calc_posterior_covariance(P, PHᵀ, K) = P .- PHᵀ * K' # (I - K * H) * P ?
 
 function measurement_update!(mu::KFMUIntermediate, x, P, y, H::AbstractMatrix, R)
-    PHᵀ = mu.pht
     ỹ = calc_innovation!(mu.innovation, H, x, y)
-    mul!(PHᵀ, P, H')
+    PHᵀ = calc_P_xy!(mu.pht, P, H)
     S = calc_innovation_covariance!(mu.innovation_covariance, H, PHᵀ, R)
     K = calc_kalman_gain!(mu.s_chol, mu.kalman_gain, PHᵀ, S)
     x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)
     P_post = calc_posterior_covariance!(mu.p_posterior, P, PHᵀ, K)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+end
+
+function calc_P_xy!(PHᵀ, P, H)
+    mul!(PHᵀ, P, H')
+    PHᵀ
 end
 
 function calc_apriori_state!(x_apri, x, F)
@@ -114,10 +122,6 @@ end
 
 function calc_posterior_state!(x_posterior, x, K, ỹ)
     x_posterior .= @~ K * ỹ + x
-end
-
-function calc_posterior_covariance(P, PHᵀ, K)
-    P .- PHᵀ * K' # (I - K * H) * P ?
 end
 
 function calc_posterior_covariance!(P_posterior, P, PHᵀ, K)
