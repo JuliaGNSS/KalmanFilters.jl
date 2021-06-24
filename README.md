@@ -53,7 +53,7 @@ F(x) = x .* [1., 2.]
 tu = time_update(x, P, F, Q)
 ```
 
-#### Augmentation
+### Augmentation
 KalmanFilter also allows to augment the noise-covariances:
 ```julia
 F(x, noise) = x .* [1., 2.] .+ noise
@@ -73,12 +73,47 @@ tu = time_update(x_init, P_init_chol, F, Q_chol)
 mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), measurement, H, Augment(R_chol))
 ```
 
+### Considered states
+
+All variants support to *consider* some of the states in the measurement update. Considered states are states, that are considered in the model with its mean and variance, but are not updated in the update procedure. 
+
 ### Statistical consistency testing
-Goal: perform two of the most relevant consistency statistical tests of the Kalman filter
+This module provides two consistency tests
 - the Normalized innovation squared (NIS) test
-  - tests for unbiasedness
-- the Innovation magnitude bound test
+- the Innovation sigma bound test
   - tests if approximately 68% (95%) of the innovation sequence values lie within the ⨦σ (⨦2σ) bound
+
+## Benchmarks
+
+This module was build with performance in mind. For almost all variants of the Kalman-Filter you will find an inplace version. The inplace version is marked with an exclamation mark like e.g. `time_update!` and `measurement_update!`. The intermediate results are saved into an pre-allocated buffer. That's
+
+Buffer | variant
+--- | ---
+`KFTUIntermediate(num_states)` | (linear) Kalman-Filter time update
+`KFMUIntermediate(num_states, num_measurements)` | (linear) Kalman-Filter measurement update
+`SRKFTUIntermediate(num_states)` | (linear) Square-Root Kalman-Filter time update
+`SRKFMUIntermediate(num_states, num_measurements)` | (linear) Square-Root Kalman-Filter measurement update
+`UKFTUIntermediate(num_states)` | Unscented-Kalman-Filter time update
+`UKFMUIntermediate(num_states, num_measurements)` | Unscented-Kalman-Filter measurement update
+`SRUKFTUIntermediate(num_states)` | Square-Root Unscented-Kalman-Filter time update
+`SRUKFMUIntermediate(num_states, num_measurements)` | Square-Root Unscented-Kalman-Filter measurement update
+`AUKFTUIntermediate(num_states)` | Augmented Unscented-Kalman-Filter time update
+`AUKFMUIntermediate(num_states, num_measurements)` | Augmented Unscented-Kalman-Filter measurement update
+`SRAUKFTUIntermediate(num_states)` | Square-Root Augmented Unscented-Kalman-Filter time update
+`SRAUKFMUIntermediate(num_states, num_measurements)` | Square-Root Augmented Unscented-Kalman-Filter measurement update
+
+There is a benchmark to compare the different implementations in the benchmark folder. For the benchmark a linear model was chosen, that is supported by all variants.
+
+### Time update
+![Time update timings](benchmark/tu_time.png)
+![Time update allocations](benchmark/tu_alloc.png)
+
+### Measurement update
+
+![Measurement update timings](benchmark/mu_time.png)
+![Measurement update allocations](benchmark/mu_alloc.png)
+
+In same cases the inplace variant is slower than the allocating variant. More investigation is needed to find out why this is the case.
 
 ## License
 
