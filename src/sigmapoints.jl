@@ -103,76 +103,77 @@ end
 
 abstract type AbstractSigmaPoints{T} <: AbstractMatrix{T} end
 
-struct SigmaPoints{T, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
-    x0::Vector{T}
-    P_chol::Matrix{T}
+struct SigmaPoints{T, V <: AbstractVector{T}, M <: AbstractMatrix{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
+    x0::V
+    P_chol::M
     weight_params::W
-    SigmaPoints{T, W}(x0, P_chol, weight_params) where {T<:Real, W<:AbstractWeightingParameters} =
+    SigmaPoints{T, V, M, W}(x0, P_chol, weight_params) where {T<:Real, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters} =
         size(x0, 1) == size(P_chol, 1) == size(P_chol, 2) && P_chol == LowerTriangular(P_chol) ?
-        new{T, W}(x0, P_chol, weight_params) :
+        new{T, V, M, W}(x0, P_chol, weight_params) :
         error("The length of the first dimension must be equal to the size of P_chol and P_chol must have a LowerTriangular structure")
 end
 
-SigmaPoints(x0::Vector{T}, P_chol::LowerTriangular{T}, weight_params::W) where {T<:Real, W<:AbstractWeightingParameters} =
-    SigmaPoints{T, W}(x0, collect(P_chol), weight_params)
-SigmaPoints(x0::Vector{T}, P_chol::Cholesky{T}, weight_params::W) where {T<:Real, W<:AbstractWeightingParameters} =
-    SigmaPoints{T, W}(x0, collect(P_chol.L), weight_params)
+SigmaPoints(x0::V, P_chol::LowerTriangular{T}, weight_params::W) where {T<:Real, V<:AbstractVector{T}, W<:AbstractWeightingParameters} =
+    SigmaPoints{T, V, typeof(collect(P_chol)), W}(x0, collect(P_chol), weight_params)
+SigmaPoints(x0::V, P_chol::Cholesky{T}, weight_params::W) where {T<:Real, V<:AbstractVector{T}, W<:AbstractWeightingParameters} =
+    SigmaPoints{T, V, typeof(collect(P_chol.L)), W}(x0, collect(P_chol.L), weight_params)
 
 function calc_sigma_points(
-    x::AbstractVector{T},
+    x::V,
     P::AbstractMatrix{T},
     weight_params::W
-) where {T, W<:AbstractWeightingParameters}
+) where {T, V<:AbstractVector{T}, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol = cholesky(Hermitian(P .* weight))
-    SigmaPoints{T, W}(x, P_chol.L, weight_params)
+    SigmaPoints{T, V, typeof(P_chol.L), W}(x, P_chol.L, weight_params)
 end
 
 function calc_sigma_points(
-    x::AbstractVector{T},
+    x::V,
     P::Cholesky{T},
     weight_params::W
-) where {T, W<:AbstractWeightingParameters}
+) where {T, V<:AbstractVector{T}, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
-    SigmaPoints{T, W}(x, P.L * sqrt(weight), weight_params)
+    weighted_P_chol = P.L * sqrt(weight)
+    SigmaPoints{T, V, typeof(weighted_P_chol), W}(x, weighted_P_chol, weight_params)
 end
 
 function calc_sigma_points!(
-    P_chol_temp::AbstractMatrix{T},
-    x::AbstractVector{T},
-    P::AbstractMatrix{T},
+    P_chol_temp::M,
+    x::V,
+    P::M,
     weight_params::W
-) where {T, W<:AbstractWeightingParameters}
+) where {T, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol_temp .= P .* weight
     P_chol = cholesky!(Hermitian(P_chol_temp))
     P_chol_temp .= P_chol.uplo === 'U' ? transpose(P_chol.U) : P_chol.L
-    SigmaPoints{T, W}(x, P_chol_temp, weight_params)
+    SigmaPoints{T, V, M, W}(x, P_chol_temp, weight_params)
 end
 
 function calc_sigma_points!(
-    P_chol_temp::AbstractMatrix{T},
-    x::AbstractVector{T},
+    P_chol_temp::M,
+    x::V,
     P::Cholesky{T},
     weight_params::W
-) where {T, W<:AbstractWeightingParameters}
+) where {T, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol_temp .= (P.uplo === 'U' ? transpose(P.U) : P.L) .* sqrt(weight)
-    SigmaPoints{T, W}(x, P_chol_temp, weight_params)
+    SigmaPoints{T, V, M, W}(x, P_chol_temp, weight_params)
 end
 
-struct TransformedSigmaPoints{T, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
-    x0::Vector{T}
-    xi::Matrix{T}
+struct TransformedSigmaPoints{T, V <: AbstractVector{T}, M <: AbstractMatrix{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
+    x0::V
+    xi::M
     weight_params::W
-    TransformedSigmaPoints{T, W}(x0, xi, weight_params) where {T<:Real, W<:AbstractWeightingParameters} =
+    TransformedSigmaPoints{T, V, M, W}(x0, xi, weight_params) where {T<:Real, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters} =
         size(x0, 1) == size(xi, 1) ?
-        new{T, W}(x0, xi, weight_params) :
+        new{T, V, M, W}(x0, xi, weight_params) :
         error("The length of the first dimension must be the same for all inputs")
 end
 
-TransformedSigmaPoints(x0::Vector{T}, xi::Matrix{T}, weight_params::W) where {T<:Real, W<:AbstractWeightingParameters} =
-    TransformedSigmaPoints{T, W}(x0, xi, weight_params)
+TransformedSigmaPoints(x0::V, xi::M, weight_params::W) where {T<:Real, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters} =
+    TransformedSigmaPoints{T, V, M, W}(x0, xi, weight_params)
 
 function transform(F, χ::SigmaPoints{T}) where T
     𝓨_x0 = F(χ.x0)
