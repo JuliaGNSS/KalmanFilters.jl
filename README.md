@@ -87,7 +87,7 @@ This module provides two consistency tests
 
 This module was build with performance in mind. For almost all variants of the Kalman-Filter you will find an inplace version. The inplace version is marked with an exclamation mark like e.g. `time_update!` and `measurement_update!`. The intermediate results are saved into an pre-allocated buffer. That's
 
-Buffer | variant
+Buffer | Variant
 --- | ---
 `KFTUIntermediate(num_states)` | (linear) Kalman-Filter time update
 `KFMUIntermediate(num_states, num_measurements)` | (linear) Kalman-Filter measurement update
