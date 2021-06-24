@@ -1,10 +1,9 @@
 
-[![pipeline status](https://git.rwth-aachen.de/nav/KalmanFilter.jl/badges/master/pipeline.svg)](https://git.rwth-aachen.de/nav/KalmanFilter.jl/commits/master)
-[![coverage report](https://git.rwth-aachen.de/nav/KalmanFilter.jl/badges/master/coverage.svg)](https://git.rwth-aachen.de/nav/KalmanFilter.jl/commits/master)
-# KalmanFilter
+[![Tests](https://github.com/JuliaGNSS/KalmanFilter.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/JuliaGNSS/KalmanFilter.jl/actions)
+[![codecov](https://codecov.io/gh/JuliaGNSS/KalmanFilter.jl/branch/master/graph/badge.svg?token=KCFJHJ4Q2T)](https://codecov.io/gh/JuliaGNSS/KalmanFilter.jl)
+# KalmanFilter.jl
 Provides multiple Kalman Filters
 
-## Features
 * (Square Root) Kalman Filter ((SR-)KF)
 * (Square Root) Unscented Kalman Filter ((SR-)UKF)
 * (Square Root) Augment Unscented Kalman Filter ((SR-)AUKF)
@@ -14,7 +13,7 @@ Provides multiple Kalman Filters
 Install:
 ```julia
 julia> ]
-pkg> add git@git.rwth-aachen.de:nav/KalmanFilter.jl.git
+pkg> add KalmanFilter
 ```
 
 ## Usage
