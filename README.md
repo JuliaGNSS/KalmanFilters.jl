@@ -76,7 +76,7 @@ mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), measurement, H, 
 
 All variants support to *consider* some of the states in the measurement update. Considered states are states, that are considered in the model with its mean and variance, but are not updated in the update procedure. To use this feature, there is an optional paramter `consider`:
 ```julia
-measurement_update(x, P, measurement, H, Augment(R), consider = 3:5)
+measurement_update(x, P, measurement, H, R, consider = 3:5)
 ```
 
 ### Statistical consistency testing
