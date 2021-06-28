@@ -66,7 +66,7 @@ P_init_chol = cholesky(P_init)
 Q_chol = cholesky(Q)
 R_chol = cholesky(R)
 tu = time_update(x_init, P_init_chol, F, Q_chol)
-mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), measurement, H, Augment(R_chol))
+mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), measurement, H, R_chol)
 ```
 
 ### Considered states
