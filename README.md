@@ -18,13 +18,10 @@ pkg> add KalmanFilter
 
 ## Usage
 
-This package makes usage of multiple dispatch in Julia. 
-
-If you'd like to use the (linear) Kalman-Filter, simply pass matrices for time update and measurement update function. If you'd like to use the Unscented-Kalman-Filter, pass functions to the time update and measurement update instead. You can also use the (linear) Kalman-Filter for the time update and the Unscented-Kalman-Filter for the measurement update or vice-versa.
-
-If you pass cholesky decompositions for the state-covariance and the noise-covariante, this implementation will use the corresponding square-root variant.
-
-If you like, you can augment the noise-covariance to the state-covariance, if you wrap the noise-covariance by `Augment`.
+KalmanFilter.jl has very flexible structure. For example you are free to choose the type of the Kalman-Filter for the time update and measurement update independently. If you have a linear time update, you may choose the (linear) Kalman-Filter and if the measurement update is non-linear, you can choose the Unscented-Kalman-Filter for that or vice versa.
+The distinction between the different Kalman-Filters is made by the input types:
+If the model is defined by a Matrix, the linear Kalman-Filter will be used. If the model is defined by a function or a functor (in case you need to pass additional information), the implementation will assume, that the model is non-linear, and will, therefore, use the Unscented-Kalman-Filter.
+If you’d like to augment the noise covariance, you will have to wrap the noise covariance by the `Augment` type.
 
 ### Linear case
 The linear Kalman Filter will be applied if you pass matrices `F` and `H` to the functions `time_update` and `measurement_update` respectively.
