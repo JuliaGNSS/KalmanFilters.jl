@@ -103,20 +103,20 @@ end
 
 abstract type AbstractSigmaPoints{T} <: AbstractMatrix{T} end
 
-struct SigmaPoints{T, V <: AbstractVector{T}, M <: AbstractMatrix{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
+struct SigmaPoints{T, V <: AbstractVector{T}, L <: LowerTriangular{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
     x0::V
-    P_chol::M
+    P_chol::L
     weight_params::W
-    SigmaPoints{T, V, M, W}(x0, P_chol, weight_params) where {T<:Real, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters} =
-        size(x0, 1) == size(P_chol, 1) == size(P_chol, 2) && P_chol == LowerTriangular(P_chol) ?
-        new{T, V, M, W}(x0, P_chol, weight_params) :
-        error("The length of the first dimension must be equal to the size of P_chol and P_chol must have a LowerTriangular structure")
+    SigmaPoints{T, V, L, W}(x0, P_chol, weight_params) where {T<:Real, V<:AbstractVector{T}, L<:LowerTriangular{T}, W<:AbstractWeightingParameters} =
+        size(x0, 1) == size(P_chol, 1) == size(P_chol, 2) ?
+        new{T, V, L, W}(x0, P_chol, weight_params) :
+        error("The length of the first dimension must be equal to the size of P_chol")
 end
 
-SigmaPoints(x0::V, P_chol::LowerTriangular{T}, weight_params::W) where {T<:Real, V<:AbstractVector{T}, W<:AbstractWeightingParameters} =
-    SigmaPoints{T, V, typeof(collect(P_chol)), W}(x0, collect(P_chol), weight_params)
 SigmaPoints(x0::V, P_chol::Cholesky{T}, weight_params::W) where {T<:Real, V<:AbstractVector{T}, W<:AbstractWeightingParameters} =
-    SigmaPoints{T, V, typeof(collect(P_chol.L)), W}(x0, collect(P_chol.L), weight_params)
+    SigmaPoints{T, V, typeof(P_chol.L), W}(x0, P_chol.L, weight_params)
+SigmaPoints(x0::V, P_chol::L, weight_params::W) where {T<:Real, V<:AbstractVector{T}, L<:LowerTriangular{T}, W<:AbstractWeightingParameters} =
+    SigmaPoints{T, V, L, W}(x0, P_chol, weight_params)
 
 function calc_sigma_points(
     x::V,
@@ -124,7 +124,7 @@ function calc_sigma_points(
     weight_params::W
 ) where {T, V<:AbstractVector{T}, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
-    P_chol = cholesky(Hermitian(P .* weight))
+    P_chol = cholesky(Hermitian(P .* weight, :L))
     SigmaPoints{T, V, typeof(P_chol.L), W}(x, P_chol.L, weight_params)
 end
 
@@ -146,9 +146,8 @@ function calc_sigma_points!(
 ) where {T, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol_temp .= P .* weight
-    P_chol = cholesky!(Hermitian(P_chol_temp))
-    P_chol_temp .= P_chol.uplo === 'U' ? transpose(P_chol.U) : P_chol.L
-    SigmaPoints{T, V, M, W}(x, P_chol_temp, weight_params)
+    P_chol = cholesky!(Hermitian(P_chol_temp, :L))
+    SigmaPoints{T, V, typeof(P_chol.L), W}(x, P_chol.L, weight_params)
 end
 
 function calc_sigma_points!(
@@ -159,7 +158,7 @@ function calc_sigma_points!(
 ) where {T, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol_temp .= (P.uplo === 'U' ? transpose(P.U) : P.L) .* sqrt(weight)
-    SigmaPoints{T, V, M, W}(x, P_chol_temp, weight_params)
+    SigmaPoints(x, LowerTriangular(P_chol_temp), weight_params)
 end
 
 struct TransformedSigmaPoints{T, V <: AbstractVector{T}, M <: AbstractMatrix{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
@@ -177,14 +176,13 @@ TransformedSigmaPoints(x0::V, xi::M, weight_params::W) where {T<:Real, V<:Abstra
 
 function transform(F, χ::SigmaPoints{T}) where T
     𝓨_x0 = F(χ.x0)
+    num_x = length(χ.x0)
     𝓨_xi = Matrix{T}(undef, length(𝓨_x0), 2 * length(χ.x0))
-    xi_temp = Vector{T}(undef, length(χ.x0))
-    @inbounds for i = 1:length(χ.x0)
-        xi_temp[:] .= χ.x0 .+ @view(χ.P_chol[:, i])
+    xi_temp = copy(χ.x0)
+    @inbounds for i = length(χ.x0):-1:1
+        xi_temp[i:num_x] .= @view(χ.x0[i:num_x]) .+ @view(χ.P_chol.data[i:num_x, i])
         𝓨_xi[:, i] = F(xi_temp)
-    end
-    @inbounds for i = 1:length(χ.x0)
-        xi_temp[:] .= χ.x0 .- @view(χ.P_chol[:, i])
+        xi_temp[i:num_x] .= @view(χ.x0[i:num_x]) .- @view(χ.P_chol.data[i:num_x, i])
         𝓨_xi[:, i + length(χ.x0)] = F(xi_temp)
     end
     TransformedSigmaPoints(𝓨_x0, 𝓨_xi, χ.weight_params)
@@ -192,12 +190,12 @@ end
 
 function transform!(𝓨::TransformedSigmaPoints{T}, xi_temp, F!, χ::SigmaPoints{T}) where T
     F!(𝓨.x0, χ.x0)
-    @inbounds for i = 1:length(χ.x0)
-        xi_temp[:] .= χ.x0 .+ @view(χ.P_chol[:, i])
+    num_x = length(χ.x0)
+    xi_temp .= χ.x0
+    @inbounds for i = length(χ.x0):-1:1
+        xi_temp[i:num_x] .= @view(χ.x0[i:num_x]) .+ @view(χ.P_chol.data[i:num_x, i])
         F!(@view(𝓨.xi[:, i]), xi_temp)
-    end
-    @inbounds for i = 1:length(χ.x0)
-        xi_temp[:] .= χ.x0 .- @view(χ.P_chol[:, i])
+        xi_temp[i:num_x] .= @view(χ.x0[i:num_x]) .- @view(χ.P_chol.data[i:num_x, i])
         F!(@view(𝓨.xi[:, i + length(χ.x0)]), xi_temp)
     end
     TransformedSigmaPoints(𝓨.x0, 𝓨.xi, χ.weight_params)
@@ -236,16 +234,16 @@ end
 function cov(χ::SigmaPoints, unbiased_𝓨::TransformedSigmaPoints)
     weight_0, weight_i = calc_cov_weights(χ)
     num_states = length(χ.x0)
-    χ.P_chol * (@view(unbiased_𝓨.xi[:, 1:num_states]))' .* weight_i .-
-        χ.P_chol * (@view(unbiased_𝓨.xi[:, num_states + 1:2 * num_states]))' .* weight_i
+    (χ.P_chol * (@view(unbiased_𝓨.xi[:, 1:num_states]))' .-
+        χ.P_chol * (@view(unbiased_𝓨.xi[:, num_states + 1:2 * num_states]))') .* weight_i
 end
 
 function cov!(P, χ::SigmaPoints, unbiased_𝓨::TransformedSigmaPoints)
     weight_0, weight_i = calc_cov_weights(χ)
     num_states = length(χ.x0)
-    P .= @~ χ.P_chol * (@view(unbiased_𝓨.xi[:, 1:num_states]))' .* weight_i
-    P .-= @~ χ.P_chol * (@view(unbiased_𝓨.xi[:, num_states + 1:2 * num_states]))' .* weight_i
-    P
+    P .= @~ χ.P_chol * (@view(unbiased_𝓨.xi[:, 1:num_states]))'
+    P .-= @~ χ.P_chol * (@view(unbiased_𝓨.xi[:, num_states + 1:2 * num_states]))'
+    P .*= weight_i
 end
 
 function mean_and_cov(𝓨::TransformedSigmaPoints, Q)
@@ -305,3 +303,4 @@ function Base.copyto!(dest::TransformedSigmaPoints, bc::Broadcast.Broadcasted{Br
     end
     dest
 end
+
