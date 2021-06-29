@@ -1,6 +1,6 @@
 
 [![Tests](https://github.com/JuliaGNSS/KalmanFilters.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/JuliaGNSS/KalmanFilters.jl/actions)
-[![codecov](https://codecov.io/gh/JuliaGNSS/KalmanFilters.jl/branch/master/graph/badge.svg?token=KCFJHJ4Q2T)](https://codecov.io/gh/JuliaGNSS/KalmanFilters.jl)
+[![codecov](https://codecov.io/gh/JuliaGNSS/KalmanFilters.jl/branch/master/graph/badge.svg?token=QPRJ3M6C98)](https://codecov.io/gh/JuliaGNSS/KalmanFilters.jl)
 # KalmanFilters.jl
 Provides multiple Kalman Filters
 
@@ -20,7 +20,7 @@ pkg> add KalmanFilters
 
 KalmanFilters.jl has very flexible structure. For example you are free to choose the type of the Kalman-Filter for the time update and measurement update independently. If you have a linear time update, you may choose the (linear) Kalman-Filter and if the measurement update is non-linear, you can choose the Unscented-Kalman-Filter for that or vice versa.
 The distinction between the different Kalman-Filters is made by the input types:
-If the model is defined by a Matrix, the linear Kalman-Filter will be used. If the model is defined by a function or a [functor](https://docs.julialang.org/en/v1/manual/methods/#Function-like-objects) (in case you need to pass additional information), the implementation will assume, that the model is non-linear, and will, therefore, use the Unscented-Kalman-Filter.
+If the model is defined by a matrix, the linear Kalman-Filter will be used. If the model is defined by a function or a [functor](https://docs.julialang.org/en/v1/manual/methods/#Function-like-objects) (in case you need to pass additional information), the implementation will assume, that the model is non-linear, and will, therefore, use the Unscented-Kalman-Filter.
 If you’d like to augment the noise covariance, you will have to wrap the noise covariance by the `Augment` type.
 
 ### Linear case
@@ -63,6 +63,7 @@ KalmanFilters also allows to augment the noise-covariances:
 F(x) = x .* [1., 2.]
 F(x, noise) = x .* [1., 2.] .+ noise
 tu = time_update(x, P, F, Augment(Q))
+H(x) = x .* [1., 1.]
 H(x, noise) = x .* [1., 1.] .+ noise
 mu = measurement_update(x, P, measurement, H, Augment(R))
 ```
