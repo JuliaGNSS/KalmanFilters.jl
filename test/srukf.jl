@@ -5,15 +5,15 @@
         x = randn(5)
         PL_prior = randn(5, 5)
         P_prior = PL_prior * PL_prior'
-        χ = KalmanFilter.calc_sigma_points(x, P_prior, weight_params)
+        χ = KalmanFilters.calc_sigma_points(x, P_prior, weight_params)
         F = randn(5, 5)
         f(x) = F * x
-        𝓨 = KalmanFilter.transform(f, χ)
+        𝓨 = KalmanFilters.transform(f, χ)
         QL = randn(5, 5)
         Q = QL * QL'
         Q_chol = cholesky(Q)
-        P = @inferred KalmanFilter.cov(𝓨, Q_chol)
-        @test P.L * P.U ≈ KalmanFilter.cov(𝓨, Q)
+        P = @inferred KalmanFilters.cov(𝓨, Q_chol)
+        @test P.L * P.U ≈ KalmanFilters.cov(𝓨, Q)
     end
 
     @testset "Posterior covariance" begin
@@ -22,22 +22,22 @@
         PL = randn(5, 5)
         P = PL * PL'
         P_chol = cholesky(P)
-        χ = KalmanFilter.calc_sigma_points(x, P, weight_params)
+        χ = KalmanFilters.calc_sigma_points(x, P, weight_params)
         F = randn(3, 5)
         h(x) = F * x
-        𝓨 = KalmanFilter.transform(h, χ)
-        y_est = KalmanFilter.mean(𝓨)
-        unbiased_𝓨 = KalmanFilter.substract_mean(𝓨, y_est)
+        𝓨 = KalmanFilters.transform(h, χ)
+        y_est = KalmanFilters.mean(𝓨)
+        unbiased_𝓨 = KalmanFilters.substract_mean(𝓨, y_est)
         RL = randn(3, 3)
         R = RL * RL'
         R_chol = cholesky(R)
-        S = KalmanFilter.cov(unbiased_𝓨, R)
-        S_chol = KalmanFilter.cov(unbiased_𝓨, R_chol)
-        Pᵪᵧ = KalmanFilter.cov(χ, unbiased_𝓨)
+        S = KalmanFilters.cov(unbiased_𝓨, R)
+        S_chol = KalmanFilters.cov(unbiased_𝓨, R_chol)
+        Pᵪᵧ = KalmanFilters.cov(χ, unbiased_𝓨)
         K = Pᵪᵧ / S_chol
-        K_temp, P_post = @inferred KalmanFilter.calc_kalman_gain_and_posterior_covariance(P_chol, Pᵪᵧ, S_chol, [])
+        K_temp, P_post = @inferred KalmanFilters.calc_kalman_gain_and_posterior_covariance(P_chol, Pᵪᵧ, S_chol, [])
         @test K_temp ≈ K
-        @test P_post.L * P_post.U ≈ KalmanFilter.calc_posterior_covariance(P, Pᵪᵧ, K, [])
+        @test P_post.L * P_post.U ≈ KalmanFilters.calc_posterior_covariance(P, Pᵪᵧ, K, [])
     end
 
     @testset "Time update" begin

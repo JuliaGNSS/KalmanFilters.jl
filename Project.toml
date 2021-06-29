@@ -1,5 +1,5 @@
-name = "KalmanFilter"
-uuid = "ccb8ac20-7a30-532b-8683-d8c5251adc90"
+name = "KalmanFilters"
+uuid = "272a6111-cf0e-4c1b-a056-8d658cb314ee"
 authors = ["Soeren Zorn <soeren.zorn@nav.rwth-aachen.de>"]
 version = "0.1.1"
 

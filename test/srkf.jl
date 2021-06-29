@@ -2,16 +2,16 @@
 
     @testset "Calculate upper triangular of QR" begin
         A = randn(10, 5)
-        R_test = @inferred KalmanFilter.calc_upper_triangular_of_qr!(copy(A))
+        R_test = @inferred KalmanFilters.calc_upper_triangular_of_qr!(copy(A))
 
         Q, R = qr(A)
         @test R_test ≈ R
 
         qr_zeros = zeros(10)
-        qr_space_length = @inferred KalmanFilter.calc_gels_working_size(A, qr_zeros)
+        qr_space_length = @inferred KalmanFilters.calc_gels_working_size(A, qr_zeros)
         qr_space = zeros(qr_space_length)
         R_res = zeros(5, 5)
-        R_test_inplace = @inferred KalmanFilter.calc_upper_triangular_of_qr_inplace!(R_res, copy(A), qr_zeros, qr_space)
+        R_test_inplace = @inferred KalmanFilters.calc_upper_triangular_of_qr_inplace!(R_res, copy(A), qr_zeros, qr_space)
         @test R_test_inplace ≈ R
     end
 

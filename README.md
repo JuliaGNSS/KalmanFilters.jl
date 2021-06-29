@@ -1,7 +1,7 @@
 
-[![Tests](https://github.com/JuliaGNSS/KalmanFilter.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/JuliaGNSS/KalmanFilter.jl/actions)
-[![codecov](https://codecov.io/gh/JuliaGNSS/KalmanFilter.jl/branch/master/graph/badge.svg?token=KCFJHJ4Q2T)](https://codecov.io/gh/JuliaGNSS/KalmanFilter.jl)
-# KalmanFilter.jl
+[![Tests](https://github.com/JuliaGNSS/KalmanFilters.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/JuliaGNSS/KalmanFilters.jl/actions)
+[![codecov](https://codecov.io/gh/JuliaGNSS/KalmanFilters.jl/branch/master/graph/badge.svg?token=KCFJHJ4Q2T)](https://codecov.io/gh/JuliaGNSS/KalmanFilters.jl)
+# KalmanFilters.jl
 Provides multiple Kalman Filters
 
 * (Square Root) Kalman Filter ((SR-)KF)
@@ -13,45 +13,54 @@ Provides multiple Kalman Filters
 Install:
 ```julia
 julia> ]
-pkg> add KalmanFilter
+pkg> add KalmanFilters
 ```
 
 ## Usage
 
-KalmanFilter.jl has very flexible structure. For example you are free to choose the type of the Kalman-Filter for the time update and measurement update independently. If you have a linear time update, you may choose the (linear) Kalman-Filter and if the measurement update is non-linear, you can choose the Unscented-Kalman-Filter for that or vice versa.
+KalmanFilters.jl has very flexible structure. For example you are free to choose the type of the Kalman-Filter for the time update and measurement update independently. If you have a linear time update, you may choose the (linear) Kalman-Filter and if the measurement update is non-linear, you can choose the Unscented-Kalman-Filter for that or vice versa.
 The distinction between the different Kalman-Filters is made by the input types:
-If the model is defined by a Matrix, the linear Kalman-Filter will be used. If the model is defined by a function or a functor (in case you need to pass additional information), the implementation will assume, that the model is non-linear, and will, therefore, use the Unscented-Kalman-Filter.
+If the model is defined by a Matrix, the linear Kalman-Filter will be used. If the model is defined by a function or a [functor](https://docs.julialang.org/en/v1/manual/methods/#Function-like-objects) (in case you need to pass additional information), the implementation will assume, that the model is non-linear, and will, therefore, use the Unscented-Kalman-Filter.
 If you’d like to augment the noise covariance, you will have to wrap the noise covariance by the `Augment` type.
 
 ### Linear case
-The linear Kalman Filter will be applied if you pass matrices `F` and `H` to the functions `time_update` and `measurement_update` respectively.
+The linear Kalman Filter will be applied if you pass the process model `F` or the measurement model `H` as matrices to the functions `time_update` or `measurement_update` respectively.
 ```julia
-using KalmanFilter
+using KalmanFilters
 Δt = 0.1
+σ_acc_noise = 0.02
+σ_meas_noise = 1.0
+# Process model
 F = [1 Δt Δt^2/2; 0 1 Δt; 0 0 1]
-H = [1, 0, 0]'
+# Process noise covariance
 Q = [Δt^2/2; Δt; 1] * [Δt^2/2 Δt 1] * σ_acc_noise^2
+# Measurement model
+H = [1, 0, 0]'
+# Measurement noise covariance
 R = σ_meas_noise^2
+# Initial state and covariances
 x_init = [0.0, 0.0, 0.0]
 P_init = [2.5 0.25 0.1; 0.25 2.5 0.2; 0.1 0.2 2.5]
 # Take first measurement
+measurement = 2.0 + randn()
 mu = measurement_update(x_init, P_init, measurement, H, R)
 for i = 1:100
-    # Take a measurement
+    measurement = 2.0 + randn()
     tu = time_update(get_state(mu), get_covariance(mu), F, Q)
     mu = measurement_update(get_state(tu), get_covariance(tu), measurement, H, R)
 end
 ```
 ### Non-linear case
-If you pass a function instead of matrix for `F` or `H`, the Unscented-Kalman-Filter will be used.
+If you define the process model `F` or the measurement model `H` as a function (or a [functor](https://docs.julialang.org/en/v1/manual/methods/#Function-like-objects)), the Unscented-Kalman-Filter will be used.
 ```julia
 F(x) = x .* [1., 2.]
 tu = time_update(x, P, F, Q)
 ```
 
 ### Augmentation
-KalmanFilter also allows to augment the noise-covariances:
+KalmanFilters also allows to augment the noise-covariances:
 ```julia
+F(x) = x .* [1., 2.]
 F(x, noise) = x .* [1., 2.] .+ noise
 tu = time_update(x, P, F, Augment(Q))
 H(x, noise) = x .* [1., 1.] .+ noise

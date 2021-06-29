@@ -16,12 +16,12 @@
         # Comparison measurement update
         # Nulling Kalman Gain for considered states
         # http://www.anuncommonlab.com/articles/how-kalman-filters-work/part2.html
-        ỹ = KalmanFilter.calc_innovation(H, x, y)
-        PHᵀ = KalmanFilter.calc_P_xy(P, H)
-        S = KalmanFilter.calc_innovation_covariance(H, P, R)
-        K = KalmanFilter.calc_kalman_gain(PHᵀ, S, [])
+        ỹ = KalmanFilters.calc_innovation(H, x, y)
+        PHᵀ = KalmanFilters.calc_P_xy(P, H)
+        S = KalmanFilters.calc_innovation_covariance(H, P, R)
+        K = KalmanFilters.calc_kalman_gain(PHᵀ, S, [])
         K[5:6,:] .= 0.0
-        x_post = KalmanFilter.calc_posterior_state(x, K, ỹ, [])
+        x_post = KalmanFilters.calc_posterior_state(x, K, ỹ, [])
         # Use Joseph form, because of nulling Kalman gain
         P_post = (I - K * H) * P * (I - K * H)' + K * R * K'
 

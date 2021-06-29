@@ -3,13 +3,13 @@
         x = randn(2)
         F = randn(2,2)
         x_apri = similar(x)
-        @test KalmanFilter.calc_apriori_state!(x_apri, x, F) ≈ F * x
+        @test KalmanFilters.calc_apriori_state!(x_apri, x, F) ≈ F * x
 
         Q = randn(2,2)
         P = randn(2,2)
         FP = similar(P)
         P_apri = similar(P)
-        @test KalmanFilter.calc_apriori_covariance!(P_apri, FP, P, F, Q) ≈ F * P * F' .+ Q
+        @test KalmanFilters.calc_apriori_covariance!(P_apri, FP, P, F, Q) ≈ F * P * F' .+ Q
     end
 
     @testset "Measurement update inplace functions" begin
@@ -18,32 +18,32 @@
         y = randn(2)
         H = randn(2,2)
         ỹ = similar(y)
-        @test KalmanFilter.calc_innovation!(ỹ, H, x, y) ≈ y .- H * x
+        @test KalmanFilters.calc_innovation!(ỹ, H, x, y) ≈ y .- H * x
 
         H = randn(2,2)
         R = randn(2,2)
         PHᵀ = randn(2,2)
         S = similar(R)
-        @test KalmanFilter.calc_innovation_covariance!(S, H, PHᵀ, R) ≈ H * PHᵀ .+ R
+        @test KalmanFilters.calc_innovation_covariance!(S, H, PHᵀ, R) ≈ H * PHᵀ .+ R
 
         PHᵀ = randn(2,2)
         SL = randn(2,2)
         S = SL*SL'
         S_lu = similar(S)
         K = similar(PHᵀ)
-        @test KalmanFilter.calc_kalman_gain!(S_lu, K, PHᵀ, S) ≈ PHᵀ / S
+        @test KalmanFilters.calc_kalman_gain!(S_lu, K, PHᵀ, S) ≈ PHᵀ / S
 
         x = randn(2)
         x_posterior = similar(x)
         K = randn(2,2)
         ỹ = randn(2)
-        @test KalmanFilter.calc_posterior_state!(x_posterior, x, K, ỹ) ≈ x .+ K * ỹ
+        @test KalmanFilters.calc_posterior_state!(x_posterior, x, K, ỹ) ≈ x .+ K * ỹ
 
         P = randn(2,2)
         P_posterior = similar(P)
         PHᵀ = randn(2,2)
         K = randn(2,2)
-        @test KalmanFilter.calc_posterior_covariance!(P_posterior, P, PHᵀ, K) ≈ P .- PHᵀ * K'
+        @test KalmanFilters.calc_posterior_covariance!(P_posterior, P, PHᵀ, K) ≈ P .- PHᵀ * K'
 
     end
 

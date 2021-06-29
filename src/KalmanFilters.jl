@@ -1,4 +1,4 @@
-module KalmanFilter
+module KalmanFilters
 
     using
         DocStringExtensions,
