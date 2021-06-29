@@ -1,7 +1,7 @@
 using
     BenchmarkTools,
     LinearAlgebra,
-    KalmanFilter,
+    KalmanFilters,
     Plots,
     LazyArrays,
     Colors
