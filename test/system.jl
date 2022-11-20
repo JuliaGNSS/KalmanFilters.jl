@@ -1,68 +1,114 @@
-@testset "Kalman filter system test" begin
-    start_pt = 19
-    start_vel = 2
-    start_acc = 1
-    σ_acc_noise = 0.0001
-    σ_meas_noise = 0.25
-    Δt = 0.1
+function get_process(T)
+    [
+        1 T T^2/2
+        0 1 T
+        0 0 1
+    ]
+end
 
-    function measure(state, Δt, σ_meas_noise, σ_acc_noise)
-        s, v, a = state[1], state[2], state[3]
-        a_next = a + randn() * σ_acc_noise
-        v_next = v + a * Δt
-        s_next = a * Δt^2 / 2 + v * Δt + s
-        s_next + randn() * σ_meas_noise, (s_next, v_next, a_next)
-    end
+function get_process_covariance(T)
+    [
+        T^5/20 T^4/8 T^3/6
+        T^4/8 T^3/3 T^2/2
+        T^3/6 T^2/2 T
+    ]
+end
 
-    # State space matrices of discretized white noise acceleration model
-    F = [1 Δt Δt^2/2; 0 1 Δt; 0 0 1]
-    H = [1, 0, 0]'
-    Q = [Δt^2/2; Δt; 1] * [Δt^2/2 Δt 1] * σ_acc_noise^2
-    R = σ_meas_noise^2
+function update_state(pos_vec_acc_state, process, process_covariance)
+    num_states = length(pos_vec_acc_state)
+    C = cholesky(process_covariance).L
+#    U, s = svd(process_covariance)
+#    C = U * Diagonal(sqrt.(s))
+    process * pos_vec_acc_state + C * randn(num_states)
+end
 
-    # Initialization
-    maxiter = 20000
-    counter = 1
-    x_init = [0.0, 0.0, 0.0]
-    P_init = [2.5 0.25 0.1; 0.25 2.5 0.2; 0.1 0.2 2.5]
-    ỹ_over_time = Vector{Float64}(undef, maxiter)
-    S_over_time = Vector{Float64}(undef, maxiter)
-    states = (start_pt, start_vel, start_acc)
-    s_over_time = Vector{Float64}(undef, maxiter)
-    z_over_time = Vector{Float64}(undef, maxiter)
-    s̃_over_time = Vector{Float64}(undef, maxiter)
-    # run Kalman Filter
-    tu = time_update(x_init, P_init, F, Q)
-    for i = 1:maxiter
-        measurement, states = measure(states, Δt, σ_meas_noise, σ_acc_noise)
+function create_measurement(pos_vec_acc_state, H, R)
+    H * pos_vec_acc_state + randn() * sqrt(R) # Scalar
+end
+
+function simulate_kalman_filter_over_time(;
+    x, P, F, Q, R, H, num_iterations = 1000,
+)
+    true_states_over_time = Matrix{Float64}(undef, num_iterations, length(x))
+    est_states_over_time = Matrix{Float64}(undef, num_iterations, length(x))
+    est_state_vars_over_time = Matrix{Float64}(undef, num_iterations, length(x))
+    nis_over_time = Vector{Float64}(undef, num_iterations)
+    innovation_over_time = Vector{Float64}(undef, num_iterations)
+    innovation_vars_over_time = Vector{Float64}(undef, num_iterations)
+
+    tu = KalmanFilters.KFTimeUpdate(x, P)
+    for i = 1:num_iterations
+        # Simulate measurement
+        measurement = create_measurement(x, H, R)
+
+        # Filter with Kalman Filter
         mu = measurement_update(get_state(tu), get_covariance(tu), measurement, H, R)
+
+        # Save values
+        true_states_over_time[i, :] = x
+        est_states_over_time[i, :] = get_state(mu)
+        est_state_vars_over_time[i, :] = diag(get_covariance(mu))
+        nis_over_time[i] = calc_nis(mu)
+        innovation_over_time[i] = get_innovation(mu)
+        innovation_vars_over_time[i] = get_innovation_covariance(mu)
+
         tu = time_update(get_state(mu), get_covariance(mu), F, Q)
 
-        #s̃_over_time[counter] = state(mu)[1]
-        #s_over_time[counter] = states[1]
-        #z_over_time[counter] = measurement
-        ỹ_over_time[counter] = get_innovation(mu)
-        S_over_time[counter] = get_innovation_covariance(mu)
-        counter += 1
+        # Update simulation states
+        x = update_state(x, F, Q)
     end
-    #using PyPlot
-    #figure()
-    #plot(s_over_time)
-    #plot(z_over_time)
-    #plot(s̃_over_time)
-    #plot(ỹ_over_time)
-    #plot(s_over_time .- s̃_over_time)
-    #legend(("Ground truth", "Messung", "Schätzung", "Innovation", "Error"))
+    true_states_over_time, est_states_over_time, est_state_vars_over_time, nis_over_time, innovation_over_time, innovation_vars_over_time
+end
 
-    # Statistical consistency testing
-    @test sigma_bound_test(ỹ_over_time[4:end], S_over_time[4:end]) == true
-    @test two_sigma_bound_test(ỹ_over_time[4:end], S_over_time[4:end]) == true
+function test_innovation(niss, innovations, innovation_vars)
+    @test calc_nis_test(niss, num_measurements = size(innovations, 2))
+    @test innovation_correlation_test(innovations)
+    @test all(isapprox.(mean(innovations, dims = 1), 0.0, atol = 5e-3)) # 5e-3?
+    @test all(calc_sigma_bound_test(innovations, innovation_vars; atol = 0.05))
+end
 
-    window_start = 4
-    window_length = 400
-    window = window_start:window_start + window_length - 1
-    dof = length(window) * size(ỹ_over_time[window_start], 1)
-    nis_over_time_sys = map((x, σ²) -> calc_nis(x, σ²), ỹ_over_time[window], S_over_time[window])
-    result_nis_test = nis_test(nis_over_time_sys, dof)
-    @test result_nis_test == true
+function test_state_errors(state_errors, est_state_vars)
+    @test all(isapprox.(mean(state_errors, dims = 1), 0.0, atol = 5e-3)) # 5e-3?
+    @test all(calc_sigma_bound_test(state_errors, est_state_vars; atol = 0.08))
+end
+
+@testset "Kalman filter system test" begin
+
+    acc_std = 1e-2
+    noise_std = 0.01
+
+    T = 1e-2
+    F = get_process(T)
+    Q = get_process_covariance(T) * acc_std^2
+    R = noise_std^2
+    H = [1, 0, 0]'
+    num_iterations = 4000
+
+    x = zeros(3)
+    P = collect(Diagonal([8.0e1^2, 2.0e-1^2, 2.0e-1^2]))
+    
+    true_states_over_time, est_states_over_time, est_state_vars_over_time, nis_over_time, innovation_over_time, innovation_vars_over_time =
+        simulate_kalman_filter_over_time(; x, P, F, Q, R, H, num_iterations)
+
+    # System is ergodic -> Monte Carlo evaluation isn't needed
+    # Normalized innovation squared test
+    test_innovation(nis_over_time, innovation_over_time, innovation_vars_over_time)
+    
+    # State error should be zero mean and 68% should be within sigma bound
+    state_errors_over_time = est_states_over_time - true_states_over_time
+    test_state_errors(state_errors_over_time, est_state_vars_over_time)
+
+#=
+    using Plots
+    plot(true_states_over_time, layout = 3, lab = "True", ylabel = ["Position" "Velocity" "Acceleration"])
+    plot!(est_states_over_time, lab = "Est.")
+
+    plot(true_states_over_time - est_states_over_time, layout = 3, legend = false, ylabel = ["Position error" "Velocity error" "Acceleration error"])
+    plot!(sqrt.(est_state_vars_over_time), color = :red)
+    plot!(-sqrt.(est_state_vars_over_time), color = :red)
+
+    plot(innovation_over_time[2:end])
+    plot!(sqrt.(innovation_cov_over_time[2:end]), color = :red)
+    plot!(-sqrt.(innovation_cov_over_time[2:end]), color = :red)
+=#
 end

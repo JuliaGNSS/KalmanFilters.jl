@@ -1,16 +1,22 @@
 """
 $(SIGNATURES)
 
-Average number of sigma bound exceedings
-
-Returns the average number of unbiased states / innovation values that exceed the ⨦σ bound of the given covariance
+Tests if the absolute value of the states exceed the standard deviation.
 """
-function mean_num_sigma_bound_exceedings(state_over_time::Vector{Vector{T}}, covariance_over_time::Vector{Matrix{T}}) where T
-    mean(map((x, P) -> abs.(x) .> sqrt.(diag(P)), state_over_time, covariance_over_time))
+function do_state_errors_exceed_stds(
+    state_errors::T,
+    variances::T
+) where T <: AbstractArray
+    does_state_error_exceed_std.(state_errors, variances)
 end
 
-function mean_num_sigma_bound_exceedings(state_over_time::Vector{T}, covariance_over_time::Vector{T}) where T
-    mean(map((x, P) ->  abs(x) > sqrt(P), state_over_time, covariance_over_time))
+"""
+$(SIGNATURES)
+
+Tests if the absolute value of the state exceed the variance
+"""
+function does_state_error_exceed_std(state_error, variance)
+    abs(state_error) > sqrt(variance)
 end
 
 """
@@ -18,10 +24,35 @@ $(SIGNATURES)
 
 Innovation magnitude bound test (σ-bound-test)
 
-Tests if approximately 68% of state values lie within the ⨦σ bound
+Tests if approximately 68% of state values lie within the ⨦σ bound. The parameter
+dims must be the dimenstion of Monte Carlo runs or the time dimension.
 """
-function sigma_bound_test(state_over_time, covariance_over_time)
-    isapprox.(mean_num_sigma_bound_exceedings(state_over_time, covariance_over_time), .32, atol = .015)
+function calc_sigma_bound_test(
+    state_errors::AbstractMatrix{T},
+    variances::AbstractMatrix{T};
+    dims = 1,
+    atol = 0.06
+) where T
+    mean_state_errors_exceed_variance = vec(mean(
+        do_state_errors_exceed_stds(state_errors, variances),
+        dims = dims
+    ))
+    exceed_probability = 1 - (cdf(Normal(), 1) - cdf(Normal(), -1))
+    isapprox.(mean_state_errors_exceed_variance, exceed_probability; atol)
+end
+
+function calc_sigma_bound_test(
+    state_errors::AbstractVector{T},
+    variances::AbstractVector{T};
+    dims = 1,
+    atol = 0.06
+) where T
+    only(calc_sigma_bound_test(
+        reshape(state_errors, length(state_errors), 1),
+        reshape(variances, length(state_errors), 1);
+        dims,
+        atol
+    ))
 end
 
 """
@@ -29,10 +60,35 @@ $(SIGNATURES)
 
 Innovation magnitude bound test (2σ-bound-test)
 
-Tests if approximately 95% of state values lie within the ⨦2σ bound
+Tests if approximately 95% of state values lie within the ⨦2σ bound. The parameter
+    dims must be the dimenstion of Monte Carlo runs or the time dimension.
 """
-function two_sigma_bound_test(state_over_time, covariance_over_time)
-    isapprox.(mean_num_sigma_bound_exceedings(state_over_time, 4 .* covariance_over_time), .05, atol = .008)
+function calc_two_sigma_bound_test(
+    state_errors::AbstractMatrix{T},
+    variances::AbstractMatrix{T};
+    dims = 1,
+    atol = 0.05
+) where T
+    mean_state_errors_exceed_4x_variance = vec(mean(
+        do_state_errors_exceed_stds(state_errors, 4 * variances),
+        dims = dims
+    ))
+    exceed_probability = 1 - (cdf(Normal(), 2) - cdf(Normal(), -2))
+    isapprox.(mean_state_errors_exceed_4x_variance, exceed_probability; atol)
+end
+
+function calc_two_sigma_bound_test(
+    state_errors::AbstractVector{T},
+    variances::AbstractVector{T};
+    dims = 1,
+    atol = 0.05
+) where T
+    only(calc_two_sigma_bound_test(
+        reshape(state_errors, length(state_errors), 1),
+        reshape(variances, length(state_errors), 1);
+        dims,
+        atol
+    ))
 end
 
 """
@@ -45,14 +101,16 @@ Double-tailed siginicance test with false alarm probability α = 0.05
 Calculates confidence interval [r1 r2] and tests Prob{ ∑ NIS values)} ∈ [r1 r2] ∣ H_0 ) = 1 - α
 with Hypothesis H_0: N * ∑ NIS values ∼ χ^2_{dof}
      dof (degree of freedom): N * m (N: window length, m: dimension of state vector)
+see https://cs.adelaide.edu.au/~ianr/Teaching/Estimation/LectureNotes2.pdf
 """
-function nis_test(nis_over_time, dof)
-    sum_of_nis = sum(nis_over_time)
+function calc_nis_test(nis_values::AbstractVector; num_measurements = 1)
+    degrees_of_freedom = num_measurements * length(nis_values)
+    sum_of_nis_vals = sum(nis_values)
 
-    r1 = cquantile(Chisq(dof), .975)
-    r2 = cquantile(Chisq(dof), .025)
+    r1 = cquantile(Chisq(degrees_of_freedom), .975)
+    r2 = cquantile(Chisq(degrees_of_freedom), .025)
 
-    (sum_of_nis >= r1) && (sum_of_nis <= r2)
+    r1 <= sum_of_nis_vals <= r2
 end
 
 """
@@ -60,12 +118,27 @@ $(SIGNATURES)
 
 Normalized innovation squared (NIS)
 
-Returns NIS-value for a single innovation sequence `seq` and its variance `var`
+Returns NIS-value 
 """
-function calc_nis(seq, var)
-    dot(seq, var \ seq)
+function calc_nis(innovation, innovation_covariance)
+    dot(innovation, innovation_covariance \ innovation)
 end
 
 function calc_nis(mu::AbstractMeasurementUpdate)
-    calc_nis(get_innovation(mu), mu.innovation_covariance)
+    calc_nis(get_innovation(mu), get_innovation_covariance(mu))
+end
+
+"""
+$(SIGNATURES)
+
+Auto correlation test
+ 
+"""
+function innovation_correlation_test(innovations::AbstractMatrix)
+    correlations = autocor(innovations, 0:size(innovations, 1) - 1)
+    maximum.(eachcol(correlations[2:end,:])) .< 0.1 # Less than 10% correlation
+end
+
+function innovation_correlation_test(innovations::AbstractVector)
+    only(innovation_correlation_test(reshape(innovations, length(innovations), 1)))
 end

@@ -5,7 +5,8 @@ module KalmanFilters
         Distributions,
         LinearAlgebra,
         LazyArrays,
-        Statistics
+        Statistics,
+        StatsBase
 
     const liblapack = Base.liblapack_name
     
@@ -46,9 +47,10 @@ module KalmanFilters
         measurement_update,
         measurement_update!,
         calc_nis,
-        nis_test,
-        sigma_bound_test,
-        two_sigma_bound_test,
+        calc_nis_test,
+        calc_sigma_bound_test,
+        calc_two_sigma_bound_test,
+        innovation_correlation_test,
         ConsideredState,
         ConsideredCovariance,
         ConsideredMeasurementModel,
