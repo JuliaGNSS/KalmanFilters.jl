@@ -19,7 +19,7 @@ function update_state(pos_vec_acc_state, process, process_covariance)
     C = cholesky(process_covariance).L
 #    U, s = svd(process_covariance)
 #    C = U * Diagonal(sqrt.(s))
-    process * pos_vec_acc_state + C * randn(num_states)
+    process * pos_vec_acc_state + C * randn(eltype(pos_vec_acc_state), num_states)
 end
 
 function create_measurement(pos_vec_acc_state, H, R)
@@ -70,6 +70,47 @@ end
 function test_state_errors(state_errors, est_state_vars)
     @test all(isapprox.(mean(state_errors, dims = 1), 0.0, atol = 5e-3)) # 5e-3?
     @test all(calc_sigma_bound_test(state_errors, est_state_vars; atol = 0.08))
+end
+
+@testset "Kalman filter system test" begin
+
+    acc_std = 1e-2
+    noise_std = 0.01
+
+    T = 1e-2
+    F = get_process(T)
+    Q = get_process_covariance(T) * acc_std^2
+    R = noise_std^2
+    H = [1, 0, 0]'
+    num_iterations = 4000
+
+    x = zeros(3)
+    P = collect(Diagonal([8.0e1^2, 2.0e-1^2, 2.0e-1^2]))
+    
+    true_states_over_time, est_states_over_time, est_state_vars_over_time, nis_over_time, innovation_over_time, innovation_vars_over_time =
+        simulate_kalman_filter_over_time(; x, P, F, Q, R, H, num_iterations)
+
+    # System is ergodic -> Monte Carlo evaluation isn't needed
+    # Normalized innovation squared test
+    test_innovation(nis_over_time, innovation_over_time, innovation_vars_over_time)
+    
+    # State error should be zero mean and 68% should be within sigma bound
+    state_errors_over_time = est_states_over_time - true_states_over_time
+    test_state_errors(state_errors_over_time, est_state_vars_over_time)
+
+#=
+    using Plots
+    plot(true_states_over_time, layout = 3, lab = "True", ylabel = ["Position" "Velocity" "Acceleration"])
+    plot!(est_states_over_time, lab = "Est.")
+
+    plot(true_states_over_time - est_states_over_time, layout = 3, legend = false, ylabel = ["Position error" "Velocity error" "Acceleration error"])
+    plot!(sqrt.(est_state_vars_over_time), color = :red)
+    plot!(-sqrt.(est_state_vars_over_time), color = :red)
+
+    plot(innovation_over_time[2:end])
+    plot!(sqrt.(innovation_cov_over_time[2:end]), color = :red)
+    plot!(-sqrt.(innovation_cov_over_time[2:end]), color = :red)
+=#
 end
 
 @testset "Kalman filter system test" begin
