@@ -121,7 +121,7 @@ Normalized innovation squared (NIS)
 Returns NIS-value 
 """
 function calc_nis(innovation, innovation_covariance)
-    dot(innovation, innovation_covariance \ innovation)
+    real(dot(innovation, innovation_covariance \ innovation))
 end
 
 function calc_nis(mu::AbstractMeasurementUpdate)
@@ -135,8 +135,9 @@ Auto correlation test
  
 """
 function innovation_correlation_test(innovations::AbstractMatrix)
-    correlations = autocor(innovations, 0:size(innovations, 1) - 1)
-    maximum.(eachcol(correlations[2:end,:])) .< 0.1 # Less than 10% correlation
+    correlations = abs.(ifft(fft(innovations) .* conj(fft(innovations))))
+    scaled_correlations = correlations ./ correlations[1]
+    maximum.(eachcol(scaled_correlations[2:end,:])) .< 0.1 # Less than 10% correlation
 end
 
 function innovation_correlation_test(innovations::AbstractVector)

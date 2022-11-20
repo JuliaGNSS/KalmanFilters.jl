@@ -6,7 +6,7 @@ module KalmanFilters
         LinearAlgebra,
         LazyArrays,
         Statistics,
-        StatsBase
+        FFTW
 
     const liblapack = Base.liblapack_name
     
