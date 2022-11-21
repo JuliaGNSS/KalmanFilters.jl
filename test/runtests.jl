@@ -1,4 +1,4 @@
-using Test, KalmanFilters, Random, LinearAlgebra, LazyArrays, Statistics, FFTW
+using Test, KalmanFilters, Random, LinearAlgebra, LazyArrays, Statistics, FFTW, StaticArrays
 
 Random.seed!(1234)
 

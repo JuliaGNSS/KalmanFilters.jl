@@ -47,13 +47,12 @@
 
     end
 
-    @testset "Time update" begin
+    @testset "Time update with type $t" for t = ((vec = Vector, mat = Matrix), (vec = SVector{2}, mat = SMatrix{2,2}))
 
-        x = [1., 1.]
-        P = [1. 0.; 0. 1.]
-        F = [1. 0.; 0. 2.]
-        Q = [1. 0.; 0. 1.]
-
+        x = t.vec([1., 1.])
+        P = t.mat([1. 0.; 0. 1.])
+        F = t.mat([1. 0.; 0. 2.])
+        Q = t.mat([1. 0.; 0. 1.])
 
         tu = time_update(x, P, F, Q)
         @test get_state(tu) == [1., 2.]
@@ -65,13 +64,13 @@
         @test get_covariance(tu) == [2. 0.; 0. 5.]
     end
 
-    @testset "Measurement update" begin
+    @testset "Measurement update with type $t" for t = ((vec = Vector, mat = Matrix), (vec = SVector{2}, mat = SMatrix{2,2}))
 
-        y = [1., 1.]
-        x = [1., 1.]
-        P = [1. 0.; 0. 1.]
-        H = [1. 0.; 0. 1.]
-        R = [1. 0.; 0. 1.]
+        y = t.vec([1., 1.])
+        x = t.vec([1., 1.])
+        P = t.mat([1. 0.; 0. 1.])
+        H = t.mat([1. 0.; 0. 1.])
+        R = t.mat([1. 0.; 0. 1.])
 
 
         mu = measurement_update(x, P, y, H, R)
@@ -90,9 +89,9 @@
         @test get_kalman_gain(mu) ≈ [0.5 0.0; 0.0 0.5]
 
         y = 1.
-        x = [1., 1.]
-        P = [1. 0.; 0. 1.]
-        H = [1., 0.]'
+        x = t.vec([1., 1.])
+        P = t.mat([1. 0.; 0. 1.])
+        H = t.vec([1., 0.])'
         R = 1.
 
 
@@ -114,11 +113,11 @@
         @test get_innovation_covariance(mu) ≈ [2.]
         @test get_kalman_gain(mu) ≈ [0.5, 0.]
 
-        y = [1., 1.]
+        y = t.vec([1., 1.])
         x = 1.
         P = 1.
-        H = [1., 0.]
-        R = [1. 0.; 0. 1.]
+        H = t.vec([1., 0.])
+        R = t.mat([1. 0.; 0. 1.])
 
         mu = measurement_update(x, P, y, H, R)
         @test get_state(mu) == 1.
