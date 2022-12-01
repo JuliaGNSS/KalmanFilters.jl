@@ -5,7 +5,7 @@
         R_test = @inferred KalmanFilters.calc_upper_triangular_of_qr!(copy(A))
 
         Q, R = qr(A)
-        @test R_test ≈ R
+        @test R_test ≈ R ≈ KalmanFilters.calc_upper_triangular_of_qr(A)
 
         qr_zeros = zeros(10)
         qr_space_length = @inferred KalmanFilters.calc_gels_working_size(A, qr_zeros)
@@ -15,82 +15,65 @@
         @test R_test_inplace ≈ R
     end
 
-    @testset "Time update" begin
-
-        x = [1., 1.]
-        P = [1. 0.; 0. 1.]
-        F = [1. 0.; 0. 2.]
-        Q = [1. 0.; 0. 1.]
-
-
-        tu = @inferred time_update(x, cholesky(P), F, cholesky(Q))
-        @test @inferred(get_state(tu)) == [1., 2.]
-        @test @inferred(get_covariance(tu)) ≈ [2. 0.; 0. 5.]
-
-        x = 1.
-        P = 1.
-        F = 1.
-        Q = 1.
-
-
-        tu = @inferred time_update(x, cholesky(P), F, cholesky(Q))
-        @test @inferred(get_state(tu)) == 1.
-        @test @inferred(get_covariance(tu)) ≈ [2.]
-
-        x = randn(6)
-        PL = randn(6,6)
+    @testset "Time update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+        x = t.vec(randn(T, 3))
+        PL = randn(T, 3,3)
         P = PL'PL
-        P_chol = cholesky(P)
-        QL = randn(6,6)
+        P_chol = cholesky(Hermitian(P))
+        QL = t.mat(randn(T, 3, 3))
         Q = QL'QL
-        Q_chol = cholesky(Q)
-        F = randn(6,6)
+        Q_chol = cholesky(Hermitian(Q))
+        F = t.mat(randn(T, 3, 3))
 
         tu = @inferred time_update(x, P, F, Q)
         tu_chol = @inferred time_update(x, P_chol, F, Q_chol)
         @test @inferred(get_covariance(tu_chol)) ≈ get_covariance(tu)
         @test @inferred(get_state(tu_chol)) ≈ get_state(tu)
 
-        tu_interm = @inferred SRKFTUIntermediate(6)
-        tu_chol_inplace = @inferred time_update!(tu_interm, x, P_chol, F, Q_chol)
-        @test @inferred(get_covariance(tu_chol_inplace)) ≈ get_covariance(tu)
-        @test @inferred(get_state(tu_chol_inplace)) ≈ get_state(tu)
+        if x isa Vector
+            tu_interm = @inferred SRKFTUIntermediate(T, 3)
+            tu_chol_inplace = @inferred time_update!(tu_interm, x, P_chol, F, Q_chol)
+            @test @inferred(get_covariance(tu_chol_inplace)) ≈ get_covariance(tu)
+            @test @inferred(get_state(tu_chol_inplace)) ≈ get_state(tu)
+        end
     end
 
-    @testset "Measurement update" begin
-
-        y = [1., 1.]
-        x = [1., 1.]
-        P = [1. 0.; 0. 1.]
-        H = [1. 0.; 0. 1.]
-        R = [1. 0.; 0. 1.]
-
-
-        mu = @inferred measurement_update(x, cholesky(P), y, H, cholesky(R))
-        @test @inferred(get_state(mu)) == [1., 1.]
-        @test @inferred(get_covariance(mu)) ≈ [0.5 0.; 0. 0.5]
-        @test @inferred(get_innovation(mu)) == [0.0, 0.0]
-        @test @inferred(get_innovation_covariance(mu)) ≈ [2.0 0.0; 0.0 2.0]
-        @test @inferred(get_kalman_gain(mu)) ≈ [0.5 0.0; 0.0 0.5]
-
-        x = randn(6)
-        PL = randn(6,6)
+    @testset "Measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+        x = t.vec(randn(T, 3))
+        PL = t.mat(randn(T, 3, 3))
         P = PL'PL
-        P_chol = cholesky(P)
-        RL = randn(3,3)
+        P_chol = cholesky(Hermitian(P))
+        RL = t.mat(randn(T, 3, 3))
         R = RL'RL
-        y = randn(3)
-        R_chol = cholesky(R)
-        H = randn(3,6)
+        R_chol = cholesky(Hermitian(R))
+        y = t.vec(randn(T, 3))
+        H = t.mat(randn(T, 3, 3))
 
         mu = @inferred measurement_update(x, P, y, H, R)
         mu_chol = @inferred measurement_update(x, P_chol, y, H, R_chol)
         @test @inferred(get_covariance(mu_chol)) ≈ get_covariance(mu)
         @test @inferred(get_state(mu_chol)) ≈ get_state(mu)
 
-        mu_interm = SRKFMUIntermediate(6, 3)
-        mu_chol_inplace = @inferred measurement_update!(mu_interm, x, P_chol, y, H, R_chol)
-        @test @inferred(get_covariance(mu)) ≈ get_covariance(mu_chol_inplace)
-        @test @inferred(get_state(mu)) ≈ get_state(mu_chol_inplace)
+        if x isa Vector
+            mu_interm = SRKFMUIntermediate(T, 3, 3)
+            mu_chol_inplace = @inferred measurement_update!(mu_interm, x, P_chol, y, H, R_chol)
+            @test @inferred(get_covariance(mu_chol_inplace)) ≈ get_covariance(mu)
+            @test @inferred(get_state(mu_chol_inplace)) ≈ get_state(mu)
+        end
+
+        x = t.vec(randn(T, 3))
+        PL = t.mat(randn(T, 3, 3))
+        P = PL'PL
+        P_chol = cholesky(Hermitian(P))
+        RL = randn()
+        R = RL'RL
+        R_chol = cholesky(R)
+        y = randn(T)
+        H = t.vec(randn(T, 3))'
+
+        mu = @inferred measurement_update(x, P, y, H, R)
+        mu_chol = @inferred measurement_update(x, P_chol, y, H, R_chol)
+        @test @inferred(get_covariance(mu_chol)) ≈ get_covariance(mu)
+        @test @inferred(get_state(mu_chol)) ≈ get_state(mu)
     end
 end
