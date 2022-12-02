@@ -161,7 +161,7 @@ function calc_sigma_points!(
     SigmaPoints(x, LowerTriangular(P_chol_temp), weight_params)
 end
 
-struct TransformedSigmaPoints{T, V <: AbstractVector{T}, M <: AbstractMatrix{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
+struct TransformedSigmaPoints{T, V<:AbstractVector{T}, M <: AbstractMatrix{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
     x0::V
     xi::M
     weight_params::W
@@ -175,18 +175,21 @@ TransformedSigmaPoints(x0::V, xi::M, weight_params::W) where {T<:Number, V<:Abst
     TransformedSigmaPoints{T, V, M, W}(x0, xi, weight_params)
 
 function transform(F, χ::SigmaPoints{T}) where T
-    𝓨_x0 = F(χ.x0)
+    𝓨_x0 = to_vec(F(χ.x0))
     num_x = length(χ.x0)
     𝓨_xi = Matrix{T}(undef, length(𝓨_x0), 2 * length(χ.x0))
     xi_temp = Vector(copy(χ.x0))
     @inbounds for i = length(χ.x0):-1:1
         xi_temp[i:num_x] .= @view(χ.x0[i:num_x]) .+ @view(χ.P_chol.data[i:num_x, i])
-        𝓨_xi[:, i] = F(xi_temp)
+        𝓨_xi[:, i] .= F(xi_temp)
         xi_temp[i:num_x] .= @view(χ.x0[i:num_x]) .- @view(χ.P_chol.data[i:num_x, i])
-        𝓨_xi[:, i + length(χ.x0)] = F(xi_temp)
+        𝓨_xi[:, i + length(χ.x0)] .= F(xi_temp)
     end
     TransformedSigmaPoints(𝓨_x0, 𝓨_xi, χ.weight_params)
 end
+
+to_vec(x::AbstractVector) = x
+to_vec(x::Number) = [x]
 
 function transform!(𝓨::TransformedSigmaPoints{T}, xi_temp, F!, χ::SigmaPoints{T}) where T
     F!(𝓨.x0, χ.x0)
@@ -204,6 +207,11 @@ end
 function mean(𝓨::TransformedSigmaPoints)
     weight_0, weight_i = calc_mean_weights(𝓨)
     Vector(𝓨.x0 .* weight_0 + vec(sum(𝓨.xi, dims = 2)) .* weight_i)
+end
+
+function mean(𝓨::TransformedSigmaPoints{T, T}) where T
+    weight_0, weight_i = calc_mean_weights(𝓨)
+    𝓨.x0 * weight_0 + sum(𝓨.xi) * weight_i
 end
 
 function mean!(y::Vector, 𝓨::TransformedSigmaPoints)
@@ -224,6 +232,10 @@ end
 function cov(unbiased_𝓨::TransformedSigmaPoints, Q::AbstractMatrix)
     weight_0, weight_i = calc_cov_weights(unbiased_𝓨)
     cov(unbiased_𝓨::TransformedSigmaPoints, Augment(Q)) .+ Q
+end
+
+function cov(unbiased_𝓨::TransformedSigmaPoints, Q::Number)
+    cov(unbiased_𝓨, reshape([Q],1,1))
 end
 
 function cov!(P, unbiased_𝓨::TransformedSigmaPoints, Q::AbstractMatrix)

@@ -60,7 +60,9 @@
             @test @inferred(get_covariance(mu_chol_inplace)) ≈ get_covariance(mu)
             @test @inferred(get_state(mu_chol_inplace)) ≈ get_state(mu)
         end
+    end
 
+    @testset "Scalar measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
         x = t.vec(randn(T, 3))
         PL = t.mat(randn(T, 3, 3))
         P = PL'PL

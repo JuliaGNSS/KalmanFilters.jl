@@ -49,4 +49,20 @@
             @test get_state(mu_ukf_inplace) ≈ get_state(mu)
         end
     end
+
+    @testset "Scalar measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+        x = t.vec(randn(T, 3))
+        PL = t.mat(randn(T, 3, 3))
+        P = PL'PL
+        RL = randn()
+        R = RL'RL
+        y = randn(T)
+        H = t.vec(randn(T, 3))'
+        h(x) = H * x
+
+        mu = measurement_update(x, P, y, H, R)
+        mu_ukf = @inferred measurement_update(x, P, y, h, R)
+        @test @inferred(get_covariance(mu_ukf)) ≈ get_covariance(mu)
+        @test @inferred(get_state(mu_ukf)) ≈ get_state(mu)
+    end
 end
