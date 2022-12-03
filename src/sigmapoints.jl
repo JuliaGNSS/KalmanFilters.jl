@@ -103,39 +103,47 @@ end
 
 abstract type AbstractSigmaPoints{T} <: AbstractMatrix{T} end
 
-struct SigmaPoints{T, V <: AbstractVector{T}, L <: LowerTriangular{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
+struct SigmaPoints{
+    T,
+    V <: AbstractVector{T},
+    L <: LowerTriangular{T},
+    W <: AbstractWeightingParameters
+} <: AbstractSigmaPoints{T}
     x0::V
     P_chol::L
     weight_params::W
-    SigmaPoints{T, V, L, W}(x0, P_chol, weight_params) where {T<:Number, V<:AbstractVector{T}, L<:LowerTriangular{T}, W<:AbstractWeightingParameters} =
+    function SigmaPoints(
+        x0::AbstractVector,
+        P_chol::Union{LowerTriangular, Cholesky},
+        weight_params::W
+    ) where {W<:AbstractWeightingParameters}
+        T = Base.promote_eltype(x0, P_chol)
+        x0_c = convert(AbstractArray{T}, x0)
+        P_chol_c = convert(AbstractArray{T}, to_lower_triangular(P_chol))
         size(x0, 1) == size(P_chol, 1) == size(P_chol, 2) ?
-        new{T, V, L, W}(x0, P_chol, weight_params) :
-        error("The length of the first dimension must be equal to the size of P_chol")
+            new{T, typeof(x0_c), typeof(P_chol_c), W}(x0, P_chol, weight_params) :
+            error("The length of the first dimension must be equal to the size of P_chol")
+    end
 end
-
-SigmaPoints(x0::V, P_chol::Cholesky{T}, weight_params::W) where {T<:Number, V<:AbstractVector{T}, W<:AbstractWeightingParameters} =
-    SigmaPoints{T, V, typeof(P_chol.L), W}(x0, P_chol.L, weight_params)
-SigmaPoints(x0::V, P_chol::L, weight_params::W) where {T<:Number, V<:AbstractVector{T}, L<:LowerTriangular{T}, W<:AbstractWeightingParameters} =
-    SigmaPoints{T, V, L, W}(x0, P_chol, weight_params)
 
 function calc_sigma_points(
     x::V,
-    P::AbstractMatrix{T},
+    P::AbstractMatrix,
     weight_params::W
-) where {T, V<:AbstractVector{T}, W<:AbstractWeightingParameters}
+) where {V<:AbstractVector, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol = cholesky(Hermitian(P .* weight, :L))
-    SigmaPoints{T, V, typeof(P_chol.L), W}(x, P_chol.L, weight_params)
+    SigmaPoints(x, P_chol.L, weight_params)
 end
 
 function calc_sigma_points(
     x::V,
-    P::Cholesky{T},
+    P::Cholesky,
     weight_params::W
-) where {T, V<:AbstractVector{T}, W<:AbstractWeightingParameters}
+) where {V<:AbstractVector, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     weighted_P_chol = P.L * sqrt(weight)
-    SigmaPoints{T, V, typeof(weighted_P_chol), W}(x, weighted_P_chol, weight_params)
+    SigmaPoints(x, weighted_P_chol, weight_params)
 end
 
 function calc_sigma_points!(
@@ -143,19 +151,19 @@ function calc_sigma_points!(
     x::V,
     P::M,
     weight_params::W
-) where {T, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters}
+) where {V<:AbstractVector, M<:AbstractMatrix, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol_temp .= P .* weight
     P_chol = cholesky!(Hermitian(P_chol_temp, :L))
-    SigmaPoints{T, V, typeof(P_chol.L), W}(x, P_chol.L, weight_params)
+    SigmaPoints(x, P_chol.L, weight_params)
 end
 
 function calc_sigma_points!(
     P_chol_temp::M,
     x::V,
-    P::Cholesky{T},
+    P::Cholesky,
     weight_params::W
-) where {T, V<:AbstractVector{T}, M<:AbstractMatrix{T}, W<:AbstractWeightingParameters}
+) where {V<:AbstractVector, M<:AbstractMatrix, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol_temp .= (P.uplo === 'U' ? transpose(P.U) : P.L) .* sqrt(weight)
     SigmaPoints(x, LowerTriangular(P_chol_temp), weight_params)
