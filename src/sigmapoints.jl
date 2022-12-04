@@ -165,7 +165,7 @@ function calc_sigma_points!(
     weight_params::W
 ) where {V<:AbstractVector, M<:AbstractMatrix, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
-    P_chol_temp .= (P.uplo === 'U' ? transpose(P.U) : P.L) .* sqrt(weight)
+    P_chol_temp .= (P.uplo === 'U' ? P.U' : P.L) .* sqrt(weight)
     SigmaPoints(x, LowerTriangular(P_chol_temp), weight_params)
 end
 

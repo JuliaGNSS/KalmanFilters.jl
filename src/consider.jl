@@ -30,8 +30,8 @@ end
 
 function calc_kalman_gain_and_posterior_covariance(P::Cholesky, Pᵪᵧ, S::Cholesky, consider::AbstractVector)
     not_consider = filter(i -> !(i in consider), 1:size(P, 1))
-    U = S.uplo === 'U' ? Pᵪᵧ / S.U : Pᵪᵧ / transpose(S.L)
-    K = S.uplo === 'U' ? U[not_consider,:] / transpose(S.U) : U[not_consider,:] / S.L
+    U = S.uplo === 'U' ? Pᵪᵧ / S.U : Pᵪᵧ / S.L'
+    K = S.uplo === 'U' ? U[not_consider,:] / S.U' : U[not_consider,:] / S.L
     P_post = copy(P)
     P_xx_xc = reduce(lowrankdowndate, eachcol(U), init = P)
     P_post.factors[not_consider,:] = P_xx_xc.U[not_consider,:]

@@ -95,8 +95,8 @@ function calc_sigma_points!(
     weight_params::W
 ) where {W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
-    P_chol_temp.P .= (P.P.uplo === 'U' ? transpose(P.P.U) : P.P.L) .* sqrt(weight)
-    P_chol_temp.noise .= (P.noise.uplo === 'U' ? transpose(P.noise.U) : P.noise.L) .* sqrt(weight)
+    P_chol_temp.P .= (P.P.uplo === 'U' ? P.P.U' : P.P.L) .* sqrt(weight)
+    P_chol_temp.noise .= (P.noise.uplo === 'U' ? P.noise.U' : P.noise.L) .* sqrt(weight)
     AugmentedSigmaPoints(x, LowerTriangular(P_chol_temp.P), LowerTriangular(P_chol_temp.noise), weight_params)
 end
 
