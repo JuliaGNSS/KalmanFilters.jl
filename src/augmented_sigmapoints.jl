@@ -2,25 +2,38 @@ struct Augment{B}
     noise::B
 end
 
-struct Augmented{A, B}
+struct Augmented{A<:Union{<:AbstractArray, <:Cholesky}, B<:Union{<:AbstractArray, <:Cholesky}}
     P::A
     noise::B
 end
 
-Augmented(P, B::Augment) = Augmented(P, B.noise)
+Augmented(P, B::Augment{<:Union{<:AbstractArray, <:Cholesky}}) = Augmented(P, B.noise)
+Augmented(P, B::Augment{<:Number}) = Augmented(P, reshape([B.noise], 1, 1))
 
 Base.size(A::Augmented) = (size(A.P, 1), size(A.P, 2) + size(A.noise, 2))
 Base.size(A::Augmented, d::Integer) = size(A)[d]
 
-struct AugmentedSigmaPoints{T, V <: AbstractVector{T}, L <: LowerTriangular{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
+struct AugmentedSigmaPoints{T, V <: AbstractVector{T}, L <: LowerTriangular{T}, N <: LowerTriangular{T}, W <: AbstractWeightingParameters} <: AbstractSigmaPoints{T}
     x0::V
     P_chol::L
-    noise_chol::L
+    noise_chol::N
     weight_params::W
-    AugmentedSigmaPoints{T, V, L, W}(x0, P_chol, noise_chol, weight_params) where {T<:Real, V<:AbstractVector{T}, L<:LowerTriangular{T}, W<:AbstractWeightingParameters} =
+    function AugmentedSigmaPoints(
+        x0::AbstractVector,
+        P_chol::Union{LowerTriangular, Cholesky},
+        noise_chol::Union{LowerTriangular, Cholesky},
+        weight_params::W
+    ) where W <: AbstractWeightingParameters
+        T = Base.promote_eltype(x0, P_chol, noise_chol)
+        x0_c = convert(AbstractArray{T}, x0)
+        P_chol_c = convert(AbstractArray{T}, to_lower_triangular(P_chol))
+        noise_chol_c = convert(AbstractArray{T}, to_lower_triangular(noise_chol))
         size(x0, 1) == size(P_chol, 1) == size(P_chol, 2) ?
-        new{T, V, L, W}(x0, P_chol, noise_chol, weight_params) :
-        error("The length of the first dimension must be equal to the size of P_chol")
+            new{T, typeof(x0_c), typeof(P_chol_c), typeof(noise_chol_c), W}(
+                x0_c, P_chol_c, noise_chol_c, weight_params
+            ) :
+            error("The length of the first dimension must be equal to the size of P_chol")
+    end
 end
 
 Base.size(S::AugmentedSigmaPoints) = (length(S.x0) + size(S.noise_chol, 1), 2 * size(S.P_chol, 2) + 2 * size(S.noise_chol, 2) + 1)
@@ -38,18 +51,12 @@ Base.getindex(S::AugmentedSigmaPoints{T}, inds::Vararg{Int,2}) where {T} =
         inds[1] <= length(S.x0) ? S.x0[inds[1]] : -S.noise_chol[inds[1] - length(S.x0), inds[2] - 2 * size(S.P_chol, 2) - size(S.noise_chol, 2) - 1]
     end
 
-AugmentedSigmaPoints(x0::V, P_chol::L, noise_chol::L, weight_params::W) where {T<:Real, V<:AbstractVector{T}, L<:LowerTriangular{T}, W<:AbstractWeightingParameters} =
-    AugmentedSigmaPoints{T, V, L, W}(x0, P_chol, noise_chol, weight_params)
-AugmentedSigmaPoints(x0::V, P_chol::L, noise_chol::Cholesky{T}, weight_params::W) where {T<:Real, V<:AbstractVector{T}, L<:LowerTriangular{T}, W<:AbstractWeightingParameters} =
-    AugmentedSigmaPoints{T, V, L, W}(x0, P_chol, noise_chol.L, weight_params)
-AugmentedSigmaPoints(x0::V, P_chol::Cholesky{T}, noise_chol::L, weight_params::W) where {T<:Real, V<:AbstractVector{T}, L<:LowerTriangular{T}, W<:AbstractWeightingParameters} =
-    AugmentedSigmaPoints{T, V, L, W}(x0, P_chol.L, noise_chol, weight_params)
-AugmentedSigmaPoints(x0::V, P_chol::Cholesky{T}, noise_chol::Cholesky{T}, weight_params::W) where {T<:Real, V<:AbstractVector{T}, W<:AbstractWeightingParameters} =
-    AugmentedSigmaPoints(x0, P_chol.L, noise_chol.L, weight_params)
+to_lower_triangular(x::LowerTriangular) = x
+to_lower_triangular(x::Cholesky) = x.L
 
 function calc_sigma_points(
-    x::AbstractVector{T},
-    P::Augmented{<:AbstractMatrix{T}, <:AbstractMatrix{T}},
+    x::AbstractVector,
+    P::Augmented{<:AbstractMatrix, <:AbstractMatrix},
     weight_params::W
 ) where {T, W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
@@ -59,20 +66,20 @@ function calc_sigma_points(
 end
 
 function calc_sigma_points(
-    x::AbstractVector{T},
-    P::Augmented{<:Cholesky{T}, <:Cholesky{T}},
+    x::AbstractVector,
+    P::Augmented{<:Cholesky, <:Cholesky},
     weight_params::W
-) where {T, W<:AbstractWeightingParameters}
+) where {W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     AugmentedSigmaPoints(x, P.P.L * sqrt(weight), P.noise.L * sqrt(weight), weight_params)
 end
 
 function calc_sigma_points!(
-    P_chol_temp::Augmented{<:AbstractMatrix{T}, <:AbstractMatrix{T}},
-    x::AbstractVector{T},
-    P::Augmented{<:AbstractMatrix{T}, <:AbstractMatrix{T}},
+    P_chol_temp::Augmented{<:AbstractMatrix, <:AbstractMatrix},
+    x::AbstractVector,
+    P::Augmented{<:AbstractMatrix, <:AbstractMatrix},
     weight_params::W
-) where {T, W<:AbstractWeightingParameters}
+) where {W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
     P_chol_temp.P .= P.P .* weight
     P_chol = cholesky!(Hermitian(P_chol_temp.P, :L))
@@ -82,27 +89,27 @@ function calc_sigma_points!(
 end
 
 function calc_sigma_points!(
-    P_chol_temp::Augmented{<:AbstractMatrix{T}, <:AbstractMatrix{T}},
-    x::AbstractVector{T},
-    P::Augmented{<:Cholesky{T}, <:Cholesky{T}},
+    P_chol_temp::Augmented{<:AbstractMatrix, <:AbstractMatrix},
+    x::AbstractVector,
+    P::Augmented{<:Cholesky, <:Cholesky},
     weight_params::W
-) where {T, W<:AbstractWeightingParameters}
+) where {W<:AbstractWeightingParameters}
     weight = calc_cholesky_weight(weight_params, P)
-    P_chol_temp.P .= (P.P.uplo === 'U' ? transpose(P.P.U) : P.P.L) .* sqrt(weight)
-    P_chol_temp.noise .= (P.noise.uplo === 'U' ? transpose(P.noise.U) : P.noise.L) .* sqrt(weight)
+    P_chol_temp.P .= (P.P.uplo === 'U' ? P.P.U' : P.P.L) .* sqrt(weight)
+    P_chol_temp.noise .= (P.noise.uplo === 'U' ? P.noise.U' : P.noise.L) .* sqrt(weight)
     AugmentedSigmaPoints(x, LowerTriangular(P_chol_temp.P), LowerTriangular(P_chol_temp.noise), weight_params)
 end
 
 function transform(F, χ::AugmentedSigmaPoints{T}) where T
-    𝓨_x0 = F(χ.x0)
+    𝓨_x0 = to_vec(F(χ.x0))
     num_x = length(χ.x0)
     𝓨_xi = Matrix{T}(undef, length(𝓨_x0), 2 * size(χ.P_chol, 2) + 2 * size(χ.noise_chol, 2))
-    xi_temp = copy(χ.x0)
+    xi_temp = Vector(copy(χ.x0))
     @inbounds for i = size(χ.P_chol, 2):-1:1
         xi_temp[i:num_x] .= @view(χ.x0[i:num_x]) .+ @view(χ.P_chol.data[i:num_x, i])
-        𝓨_xi[:, i] = F(xi_temp)
+        𝓨_xi[:, i] .= F(xi_temp)
         xi_temp[i:num_x] .= @view(χ.x0[i:num_x]) .- @view(χ.P_chol.data[i:num_x, i])
-        𝓨_xi[:, i + size(χ.P_chol, 2) + size(χ.noise_chol, 2)] = F(xi_temp)
+        𝓨_xi[:, i + size(χ.P_chol, 2) + size(χ.noise_chol, 2)] .= F(xi_temp)
     end
     @inbounds for i = 1:size(χ.noise_chol, 2)
         𝓨_xi[:, i + size(χ.P_chol, 2)] = F(χ.x0, @view(χ.noise_chol[:, i]))

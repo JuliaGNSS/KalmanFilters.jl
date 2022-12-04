@@ -1,3 +1,76 @@
+function calc_upper_triangular_of_qr(A)
+    Q, R = qr(A)
+    R
+end
+
+function calc_upper_triangular_of_qr(A::Matrix)
+    A_temp = copy(A)
+    R, = LAPACK.gels!('N', A_temp, zeros(eltype(A), size(A, 1), 1))
+    R
+end
+
+function calc_upper_triangular_of_qr!(A)
+    R, = LAPACK.gels!('N', A, zeros(eltype(A), size(A, 1), 1))
+    R
+end
+
+# This implementation is based on
+# https://github.com/rlabbe/filterpy/blob/master/filterpy/kalman/square_root.py
+function calc_apriori_covariance(
+    P::Cholesky,
+    F::Union{Number, AbstractMatrix},
+    Q::Cholesky
+)
+    A = vcat(P.U * F', Q.U)
+    R = calc_upper_triangular_of_qr(A)
+    Cholesky(R, 'U', 0)
+end
+
+function measurement_update(
+    x,
+    P::Cholesky,
+    y,
+    H::Union{Number, AbstractVector, AbstractMatrix},
+    R::Cholesky;
+    consider = nothing
+)
+    ỹ = calc_innovation(H, x, y)
+    PHᵀ, S, P_post = calc_cross_cov_innovation_posterior(P, H, R, consider)
+    K = calc_kalman_gain(PHᵀ, S.L, consider)
+    x_post = calc_posterior_state(x, K, ỹ, consider)
+    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+end
+
+calc_posterior_state(x, K::AbstractMatrix, ỹ::Number, consider) =
+    calc_posterior_state(x, vec(K), ỹ, consider)
+calc_posterior_state(x, K::AbstractMatrix, ỹ::Number, consider::Nothing) =
+    calc_posterior_state(x, vec(K), ỹ, consider)
+
+function create_matrix_for_qr(P::Cholesky{TP}, H, R::Cholesky{TR}) where {TP, TR}
+    num_y = size(R, 1)
+    num_x = size(P, 1)
+    M = zeros(promote_type(TP, TR), num_y + num_x, num_y + num_x)
+    M[1:num_y, 1:num_y] .= R.U
+    M[num_y + 1:end, 1:num_y] .= P.U * H'
+    M[num_y + 1:end, num_y + 1:end] .= P.U
+    M
+end
+
+function calc_cross_cov_innovation_posterior(P::Cholesky, H, R::Cholesky, consider)
+    num_y = size(R, 1)
+    M = create_matrix_for_qr(P, H, R)
+    RU = calc_upper_triangular_of_qr(M)
+    PHᵀ = extract_cross_covariance(RU, num_y)
+    S = extract_innovation_covariance(RU, num_y)
+    P_post = extract_posterior_covariance(RU, num_y, P, consider)
+    PHᵀ, S, P_post
+end
+
+@inline extract_cross_covariance(RU, num_y) = RU[1:num_y, num_y + 1:end]'
+@inline extract_innovation_covariance(RU, num_y) = Cholesky(RU[1:num_y, 1:num_y], 'U', 0)
+@inline extract_posterior_covariance(RU, num_y, P, consider::Nothing) =
+    Cholesky(RU[num_y + 1:end, num_y + 1:end], 'U', 0)
+
 struct SRKFTUIntermediate{T}
     x_apri::Vector{T}
     p_apri::Matrix{T}
@@ -21,25 +94,8 @@ end
 
 SRKFTUIntermediate(num_x::Number) = SRKFTUIntermediate(Float64, num_x)
 
-function calc_upper_triangular_of_qr!(A)
-    R, = LAPACK.gels!('N', A, zeros(size(A, 1), 1)) # Q, R = qr(A)
-    R
-end
-
 function calc_upper_triangular_of_qr_inplace!(res, A, B, space)
     mygels!(res, A, B, space)
-end
-
-# This implementation is based on
-# https://github.com/rlabbe/filterpy/blob/master/filterpy/kalman/square_root.py
-@inline function calc_apriori_covariance(
-    P::Cholesky,
-    F::Union{Number, AbstractMatrix},
-    Q::Cholesky
-)
-    A = vcat(P.U * F', Q.U)
-    R = calc_upper_triangular_of_qr!(A)
-    Cholesky(R, 'U', 0)
 end
 
 function time_update!(tu::SRKFTUIntermediate, x, P::Cholesky, F::Union{Number, AbstractMatrix}, Q::Cholesky)
@@ -50,46 +106,6 @@ function time_update!(tu::SRKFTUIntermediate, x, P::Cholesky, F::Union{Number, A
     P_apri = Cholesky(R, 'U', 0)
     KFTimeUpdate(x_apri, P_apri)
 end
-
-function measurement_update(
-    x,
-    P::Cholesky,
-    y,
-    H::Union{Number, AbstractVector, AbstractMatrix},
-    R::Cholesky;
-    consider = nothing
-)
-    ỹ = calc_innovation(H, x, y)
-    PHᵀ, S, P_post = calc_cross_cov_innovation_posterior(P, H, R, consider)
-    K = calc_kalman_gain(PHᵀ, S.L, consider)
-    x_post = calc_posterior_state(x, K, ỹ, consider)
-    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
-end
-
-function create_matrix_for_qr(P::Cholesky, H, R::Cholesky)
-    num_y = size(R, 1)
-    num_x = size(P, 1)
-    M = zeros(num_y + num_x, num_y + num_x)
-    M[1:num_y, 1:num_y] .= R.U
-    M[num_y + 1:end, 1:num_y] .= P.U * H'
-    M[num_y + 1:end, num_y + 1:end] .= P.U
-    M
-end
-
-function calc_cross_cov_innovation_posterior(P::Cholesky, H, R::Cholesky, consider)
-    num_y = size(R, 1)
-    M = create_matrix_for_qr(P, H, R)
-    RU = calc_upper_triangular_of_qr!(M)
-    PHᵀ = extract_cross_covariance(RU, num_y)
-    S = extract_innovation_covariance(RU, num_y)
-    P_post = extract_posterior_covariance(RU, num_y, P, consider)
-    PHᵀ, S, P_post
-end
-
-@inline extract_cross_covariance(RU, num_y) = transpose(RU[1:num_y, num_y + 1:end])
-@inline extract_innovation_covariance(RU, num_y) = Cholesky(RU[1:num_y, 1:num_y], 'U', 0)
-@inline extract_posterior_covariance(RU, num_y, P, consider::Nothing) =
-    Cholesky(RU[num_y + 1:end, num_y + 1:end], 'U', 0)
 
 struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     innovation::Vector{T}
@@ -133,7 +149,7 @@ function measurement_update!(
     M[dim_y + 1:end, 1:dim_y] .= @~ P.U * H'
     M[dim_y + 1:end, dim_y + 1:end] .= P.U
     RU = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_zeros, mu.qr_space)
-    PHᵀ = transpose(@view(RU[1:dim_y, dim_y + 1:end]))
+    PHᵀ = (@view(RU[1:dim_y, dim_y + 1:end]))'
     S = Cholesky(@view(RU[1:dim_y, 1:dim_y]), 'U', 0)
     K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, S.L)
     x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)

@@ -40,16 +40,16 @@
         @test P_post.L * P_post.U ≈ KalmanFilters.calc_posterior_covariance(P, Pᵪᵧ, K, [])
     end
 
-    @testset "Time update" begin
+    @testset "Time update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
 
-        x = randn(6)
-        A = randn(6,6)
+        x = t.vec(randn(T, 3))
+        A = t.mat(randn(T, 3, 3))
         P = A'A
-        P_chol = cholesky(P)
-        B = randn(6,6)
+        P_chol = cholesky(Hermitian(P))
+        B = t.mat(randn(T, 3, 3))
         Q = B'B
-        Q_chol = cholesky(Q)
-        F = randn(6,6)
+        Q_chol = cholesky(Hermitian(Q))
+        F = t.mat(randn(T, 3, 3))
         f(x) = F * x
 
         tu = @inferred time_update(x, P, F, Q)
@@ -57,24 +57,26 @@
         @test @inferred(get_covariance(tu_chol)) ≈ get_covariance(tu)
         @test @inferred(get_state(tu_chol)) ≈ get_state(tu)
 
-        f!(y, x) = mul!(y, F, x)
-        tu_inter = @inferred SRUKFTUIntermediate(6)
-        tu_chol_inplace = @inferred time_update!(tu_inter, x, P_chol, f!, Q_chol)
-        @test @inferred(get_covariance(tu_chol_inplace)) ≈ get_covariance(tu)
-        @test @inferred(get_state(tu_chol_inplace)) ≈ get_state(tu)
+        if x isa Vector
+            f!(y, x) = mul!(y, F, x)
+            tu_inter = @inferred SRUKFTUIntermediate(T, 3)
+            tu_chol_inplace = @inferred time_update!(tu_inter, x, P_chol, f!, Q_chol)
+            @test @inferred(get_covariance(tu_chol_inplace)) ≈ get_covariance(tu)
+            @test @inferred(get_state(tu_chol_inplace)) ≈ get_state(tu)
+        end
     end
 
-    @testset "Measurement update" begin
+    @testset "Measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
 
-        x = randn(6)
-        A = randn(6,6)
+        x = t.vec(randn(T, 3))
+        A = t.mat(randn(T, 3, 3))
         P = A'A
-        P_chol = cholesky(P)
-        B = randn(3,3)
+        P_chol = cholesky(Hermitian(P))
+        B = t.mat(randn(T, 3, 3))
         R = B'B
-        y = randn(3)
-        R_chol = cholesky(R)
-        H = randn(3,6)
+        y = t.vec(randn(T, 3))
+        R_chol = cholesky(Hermitian(R))
+        H = t.mat(randn(T, 3, 3))
         h(x) = H * x
 
         mu = @inferred measurement_update(x, P, y, H, R)
@@ -82,10 +84,30 @@
         @test @inferred(get_covariance(mu_chol)) ≈ get_covariance(mu)
         @test @inferred(get_state(mu_chol)) ≈ get_state(mu)
 
-        h!(y, x) = mul!(y, H, x)
-        mu_inter = @inferred SRUKFMUIntermediate(6, 3)
-        mu_chol_inplace = @inferred measurement_update!(mu_inter, x, P_chol, y, h!, R_chol)
-        @test @inferred(get_covariance(mu_chol_inplace)) ≈ get_covariance(mu)
-        @test @inferred(get_state(mu_chol_inplace)) ≈ get_state(mu)
+        if x isa Vector
+            h!(y, x) = mul!(y, H, x)
+            mu_inter = @inferred SRUKFMUIntermediate(T, 3, 3)
+            mu_chol_inplace = @inferred measurement_update!(mu_inter, x, P_chol, y, h!, R_chol)
+            @test @inferred(get_covariance(mu_chol_inplace)) ≈ get_covariance(mu)
+            @test @inferred(get_state(mu_chol_inplace)) ≈ get_state(mu)
+        end
+    end
+
+    @testset "Scalar measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+        x = t.vec(randn(T, 3))
+        PL = t.mat(randn(T, 3, 3))
+        P = PL'PL
+        P_chol = cholesky(Hermitian(P))
+        RL = randn()
+        R = RL'RL
+        R_chol = cholesky(R)
+        y = randn(T)
+        H = t.vec(randn(T, 3))'
+        h(x) = H * x
+
+        mu = measurement_update(x, P, y, H, R)
+        mu_chol = @inferred measurement_update(x, P_chol, y, h, R_chol)
+        @test @inferred(get_covariance(mu_chol)) ≈ get_covariance(mu)
+        @test @inferred(get_state(mu_chol)) ≈ get_state(mu)
     end
 end

@@ -267,7 +267,7 @@ num_measurement_tests = [2, 4, 8, 16, 32, 64]
 tu_time = run_time_update_benchmarks(num_state_tests)
 tu_allocations = run_time_update_benchmarks(num_state_tests, allocation = true)
 
-tu_time_plot = plot_benchmarks(tu_time, num_state_tests)
+tu_time_plot = plot_benchmarks(tu_time, num_state_tests, logscale = true)
 tu_alloc_plot = plot_benchmarks(tu_allocations, num_state_tests, ylabel = "Allocations (kB)", scale = 10^3)
 
 png(tu_time_plot, "tu_time")
@@ -276,7 +276,7 @@ png(tu_alloc_plot, "tu_alloc")
 mu_time = run_measurement_update_benchmarks(num_state_tests, num_measurement_tests)
 mu_allocations = run_measurement_update_benchmarks(num_state_tests, num_measurement_tests, allocation = true)
 
-mu_time_plot = plot_benchmarks(mu_time, num_state_tests, num_measurement_tests = num_measurement_tests)
+mu_time_plot = plot_benchmarks(mu_time, num_state_tests, num_measurement_tests = num_measurement_tests, logscale = true)
 mu_alloc_plot = plot_benchmarks(mu_allocations, num_state_tests, num_measurement_tests = num_measurement_tests, ylabel = "Allocations (kB)", scale = 10^3)
 
 png(mu_time_plot, "mu_time")
