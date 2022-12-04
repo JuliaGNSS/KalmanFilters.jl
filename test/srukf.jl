@@ -92,4 +92,22 @@
             @test @inferred(get_state(mu_chol_inplace)) ≈ get_state(mu)
         end
     end
+
+    @testset "Scalar measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+        x = t.vec(randn(T, 3))
+        PL = t.mat(randn(T, 3, 3))
+        P = PL'PL
+        P_chol = cholesky(Hermitian(P))
+        RL = randn()
+        R = RL'RL
+        R_chol = cholesky(R)
+        y = randn(T)
+        H = t.vec(randn(T, 3))'
+        h(x) = H * x
+
+        mu = measurement_update(x, P, y, H, R)
+        mu_chol = @inferred measurement_update(x, P_chol, y, h, R_chol)
+        @test @inferred(get_covariance(mu_chol)) ≈ get_covariance(mu)
+        @test @inferred(get_state(mu_chol)) ≈ get_state(mu)
+    end
 end
