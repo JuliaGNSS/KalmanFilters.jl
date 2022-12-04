@@ -8,6 +8,8 @@ Provides multiple Kalman Filters
 * (Square Root) Unscented Kalman Filter ((SR-)UKF)
 * (Square Root) Augment Unscented Kalman Filter ((SR-)AUKF)
 
+All filter implementation support the real and complexed valued inputs.
+
 ## Getting started
 
 Install:
