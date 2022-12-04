@@ -1,7 +1,7 @@
 name = "KalmanFilters"
 uuid = "272a6111-cf0e-4c1b-a056-8d658cb314ee"
 authors = ["Soeren Schoenbrod <soeren.schoenbrod@rwth-aachen.de>"]
-version = "0.1.1"
+version = "0.1.2"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
