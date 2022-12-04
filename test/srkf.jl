@@ -17,7 +17,7 @@
 
     @testset "Time update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
         x = t.vec(randn(T, 3))
-        PL = randn(T, 3,3)
+        PL = t.mat(randn(T, 3, 3))
         P = PL'PL
         P_chol = cholesky(Hermitian(P))
         QL = t.mat(randn(T, 3, 3))
