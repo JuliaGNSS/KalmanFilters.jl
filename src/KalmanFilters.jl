@@ -8,7 +8,11 @@ module KalmanFilters
         Statistics,
         FFTW
 
-    const liblapack = Base.liblapack_name
+    if isdefined(LinearAlgebra.BLAS, :libblastrampoline)
+        const liblapack = LinearAlgebra.BLAS.libblastrampoline
+    else
+        const liblapack = Base.liblapack_name
+    end
     
     import Statistics: mean, cov
 
