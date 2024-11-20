@@ -80,6 +80,7 @@ function cov(χ::TransformedSigmaPoints, noise::Cholesky)
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     A = vcat(sqrt(weight_i) * χ.xi', noise.uplo === 'U' ? noise.U : noise.L')
     R = calc_upper_triangular_of_qr!(A)
+    correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     if weight_0 < 0
         P = lowrankdowndate(S, sqrt(abs(weight_0)) * χ.x0)
@@ -94,6 +95,7 @@ function cov!(res, qr_A, qr_zeros, qr_space, x0_temp, χ::TransformedSigmaPoints
     qr_A[1:size(χ.xi, 2), :] .= sqrt(weight_i) .* χ.xi'
     qr_A[size(χ.xi, 2) + 1:end, :] = noise.uplo === 'U' ? noise.U : noise.L'
     R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_zeros, qr_space)
+    correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     x0_temp .= sqrt(abs(weight_0)) .* χ.x0
     if weight_0 < 0
@@ -108,6 +110,7 @@ function cov(χ::TransformedSigmaPoints, noise::Augment{<:Cholesky})
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     A = sqrt(weight_i) * χ.xi'
     R = calc_upper_triangular_of_qr!(A)
+    correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     if weight_0 < 0
         P = lowrankdowndate(S, sqrt(abs(weight_0)) * χ.x0)
@@ -121,6 +124,7 @@ function cov!(res, qr_A, qr_zeros, qr_space, x0_temp, χ::TransformedSigmaPoints
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     qr_A .= sqrt(weight_i) .* χ.xi'
     R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_zeros, qr_space)
+    correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     x0_temp .= sqrt(abs(weight_0)) .* χ.x0
     if weight_0 < 0

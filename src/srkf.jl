@@ -14,6 +14,25 @@ function calc_upper_triangular_of_qr!(A)
     R
 end
 
+"""
+    correct_cholesky_sign(R)
+
+    The upper triangle R of the QR decomposition doesn't necessarily have positive
+    elements on the diagonal elements. However, when used in the context of
+    a Cholesky decomposition the diagonal elements need to be positive. Hence, 
+    the function corrects the sign of the diagonal elements when necessary.
+"""
+correct_cholesky_sign(R) = sign.(diag(R)) .* R
+
+function correct_cholesky_sign!(R)
+    for i in axes(R,1)
+        if real(R[i,i]) < 0
+            R[i, :] = -R[i, :]
+        end
+    end
+    return R
+end
+
 # This implementation is based on
 # https://github.com/rlabbe/filterpy/blob/master/filterpy/kalman/square_root.py
 function calc_apriori_covariance(
@@ -23,6 +42,7 @@ function calc_apriori_covariance(
 )
     A = vcat(P.U * F', Q.U)
     R = calc_upper_triangular_of_qr(A)
+    R = correct_cholesky_sign(R)
     Cholesky(R, 'U', 0)
 end
 
@@ -60,6 +80,7 @@ function calc_cross_cov_innovation_posterior(P::Cholesky, H, R::Cholesky, consid
     num_y = size(R, 1)
     M = create_matrix_for_qr(P, H, R)
     RU = calc_upper_triangular_of_qr(M)
+    RU = correct_cholesky_sign(RU)
     PHᵀ = extract_cross_covariance(RU, num_y)
     S = extract_innovation_covariance(RU, num_y)
     P_post = extract_posterior_covariance(RU, num_y, P, consider)
@@ -103,6 +124,7 @@ function time_update!(tu::SRKFTUIntermediate, x, P::Cholesky, F::Union{Number, A
     tu.puft_vcat_q[1:size(F, 1),:] .= @~ P.U * F'
     tu.puft_vcat_q[size(F, 1) + 1:end,:] .= Q.U
     R = calc_upper_triangular_of_qr_inplace!(tu.p_apri, tu.puft_vcat_q, tu.qr_zeros, tu.qr_space)
+    correct_cholesky_sign!(R)
     P_apri = Cholesky(R, 'U', 0)
     KFTimeUpdate(x_apri, P_apri)
 end
@@ -149,6 +171,7 @@ function measurement_update!(
     M[dim_y + 1:end, 1:dim_y] .= @~ P.U * H'
     M[dim_y + 1:end, dim_y + 1:end] .= P.U
     RU = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_zeros, mu.qr_space)
+    correct_cholesky_sign!(RU)
     PHᵀ = (@view(RU[1:dim_y, dim_y + 1:end]))'
     S = Cholesky(@view(RU[1:dim_y, 1:dim_y]), 'U', 0)
     K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, S.L)
