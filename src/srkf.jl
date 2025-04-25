@@ -92,6 +92,30 @@ end
 @inline extract_posterior_covariance(RU, num_y, P, consider::Nothing) =
     Cholesky(RU[num_y + 1:end, num_y + 1:end], 'U', 0)
 
+# Specializations for StaticArrays
+function create_matrix_for_qr(P::Cholesky{TP,<:SMatrix}, H::SMatrix, R::Cholesky{TR,<:SMatrix}) where {TP,TR}
+    M = vcat(
+        hcat(R.U, zero(H)),
+        hcat(P.U * H', P.U)
+    )
+    return M
+end
+
+function SRange(i, j; kwargs...)
+    r = range(i, j; kwargs...)
+    SVector{length(r)}(r)
+end
+
+function calc_cross_cov_innovation_posterior(P::Cholesky, H::SMatrix{Dy,Dx}, R::Cholesky, consider) where {Dy,Dx}
+    M = create_matrix_for_qr(P, H, R)
+    RU = calc_upper_triangular_of_qr(M)
+    RU = correct_cholesky_sign(RU)
+    PHᵀ = RU[SOneTo(Dy), SRange(Dy + 1, Dy + Dx)]'
+    S = Cholesky(RU[SOneTo(Dy), SOneTo(Dy)], 'U', 0)
+    P_post = Cholesky(RU[SRange(Dy + 1, Dy + Dx), SRange(Dy + 1, Dy + Dx)], 'U', 0)
+    PHᵀ, S, P_post
+end
+
 struct SRKFTUIntermediate{T}
     x_apri::Vector{T}
     p_apri::Matrix{T}
