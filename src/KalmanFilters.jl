@@ -21,6 +21,8 @@ module KalmanFilters
     import ..LinearAlgebra: BlasFloat, BlasInt,
         DimensionMismatch, chkstride1, checksquare, cholesky
 
+    import StaticArrays: SVector, SMatrix, SOneTo
+
     export
         WanMerweWeightingParameters,
         MeanSetWeightingParameters,
