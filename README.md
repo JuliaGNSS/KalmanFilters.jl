@@ -24,6 +24,7 @@ KalmanFilters.jl has very flexible structure. For example you are free to choose
 The distinction between the different Kalman-Filters is made by the input types:
 If the model is defined by a matrix, the linear Kalman-Filter will be used. If the model is defined by a function or a [functor](https://docs.julialang.org/en/v1/manual/methods/#Function-like-objects) (in case you need to pass additional information), the implementation will assume, that the model is non-linear, and will, therefore, use the Unscented-Kalman-Filter.
 If you’d like to augment the noise covariance, you will have to wrap the noise covariance by the `Augment` type.
+It is also possible to use the Extended Kalman Filter by providing the predicted state and measurement vector alongside the Jacobians of the process and measurement model accordingly.
 
 ### Linear case
 The linear Kalman Filter will be applied if you pass the process model `F` or the measurement model `H` as matrices to the functions `time_update` or `measurement_update` respectively.
@@ -57,6 +58,16 @@ If you define the process model `F` or the measurement model `H` as a function (
 ```julia
 F(x) = x .* [1., 2.]
 tu = time_update(x, P, F, Q)
+```
+If you want to use the Extended Kalman Filter instead, you have to determine the Jacobian of the process model `Jf` at the current state estimate `x`, predict the state vector using the non-linear process model, and provide both for the time update.
+```julia
+x_apri = F(x);
+tu = time_update(x, x_apri, P, Jf, Q)
+```
+The same applies for the measurement update with the Jacobian of the measurement model `Jh` at the current state estimate `x`.
+```julia
+y_pre = H(x);
+mu = measurement_update(get_state(tu), get_covariance(tu), measurement, y_pre, Jh, R)
 ```
 
 ### Augmentation
