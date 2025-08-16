@@ -4,26 +4,30 @@ authors = ["Soeren Schoenbrod <soeren.schoenbrod@rwth-aachen.de>"]
 version = "0.1.5"
 
 [deps]
+DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LazyArrays = "5078a376-72f3-5289-bfd5-ec5146d43c02"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
+DifferentiationInterface = "0.7.5"
 Distributions = "0.20, 0.21, 0.22, 0.23, 0.24, 0.25"
 DocStringExtensions = "0.6, 0.7, 0.8, 0.9"
+FFTW = "1.0"
+ForwardDiff = "1.0.1"
 LazyArrays = "0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 1.0, 2.0"
 StaticArrays = "1.0"
-FFTW = "1.0"
 julia = "1.7"
 
 [extras]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test", "Random", "StaticArrays"]

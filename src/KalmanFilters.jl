@@ -1,6 +1,7 @@
 module KalmanFilters
 
-using DocStringExtensions, Distributions, LinearAlgebra, LazyArrays, Statistics, FFTW
+using DocStringExtensions,
+    Distributions, LinearAlgebra, LazyArrays, Statistics, FFTW, DifferentiationInterface
 
 if isdefined(LinearAlgebra.BLAS, :libblastrampoline)
     const liblapack = LinearAlgebra.BLAS.libblastrampoline
@@ -34,6 +35,8 @@ export WanMerweWeightingParameters,
     SRUKFMUIntermediate,
     SRAUKFMUIntermediate,
     AUKFMUIntermediate,
+    JacobianPreparation,
+    GradientPreparation,
     get_state,
     get_covariance,
     get_innovation,
@@ -95,6 +98,7 @@ end
 include("gels.jl")
 include("kf.jl")
 include("srkf.jl")
+include("ekf.jl")
 include("sigmapoints.jl")
 include("augmented_sigmapoints.jl")
 include("ukf.jl")

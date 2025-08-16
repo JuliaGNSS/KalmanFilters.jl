@@ -25,17 +25,6 @@ end
 """
 $(SIGNATURES)
 
-Extended Kalman Filter time update.
-F is the Jacobian of the process model at the current state estimate x. x_apri is the predicted state vector.
-"""
-function time_update(x, x_apri, P, F::Union{Number,AbstractMatrix}, Q)
-    P_apri = calc_apriori_covariance(P, F, Q)
-    KFTimeUpdate(x_apri, P_apri)
-end
-
-"""
-$(SIGNATURES)
-
 Kalman Filter measurement update.
 """
 function measurement_update(
@@ -55,36 +44,11 @@ function measurement_update(
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
-"""
-$(SIGNATURES)
-
-Extended Kalman Filter measurement update.
-H is then the Jacobian of the measurement model at the current state estimate x. y_pre are the predicted measurements.
-"""
-function measurement_update(
-    x,
-    P,
-    y,
-    y_pre,
-    H::Union{Number,AbstractVector,AbstractMatrix},
-    R;
-    consider = nothing,
-)
-    ỹ = calc_innovation(y_pre, y)
-    PHᵀ = calc_P_xy(P, H)
-    S = calc_innovation_covariance(H, P, R)
-    K = calc_kalman_gain(PHᵀ, S, consider)
-    x_post = calc_posterior_state(x, K, ỹ, consider)
-    P_post = calc_posterior_covariance(P, PHᵀ, K, consider)
-    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
-end
-
 calc_apriori_state(x, F) = F * x
 calc_apriori_covariance(P, F, Q) = F * P * F' + Q
 
 calc_P_xy(P, H) = P * H'
-calc_innovation(H, x, y) = y - H * x # KF
-calc_innovation(y_pre, y) = y - y_pre # EKF
+calc_innovation(H, x, y) = y - H * x
 calc_innovation_covariance(H, P, R) = H * P * H' + R
 calc_kalman_gain(PHᵀ, S, consider::Nothing) = PHᵀ / S
 calc_posterior_state(x, K, ỹ, consider::Nothing) = x + K * ỹ
