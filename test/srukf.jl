@@ -1,5 +1,4 @@
 @testset "Square root Unscented Kalman filter" begin
-
     @testset "Covariance" begin
         weight_params = ScaledSetWeightingParameters(0.5, 2, 1)
         x = randn(5)
@@ -35,12 +34,18 @@
         S_chol = KalmanFilters.cov(unbiased_𝓨, R_chol)
         Pᵪᵧ = KalmanFilters.cov(χ, unbiased_𝓨)
         K = Pᵪᵧ / S_chol
-        K_temp, P_post = @inferred KalmanFilters.calc_kalman_gain_and_posterior_covariance(P_chol, Pᵪᵧ, S_chol, [])
+        K_temp, P_post = @inferred KalmanFilters.calc_kalman_gain_and_posterior_covariance(
+            P_chol,
+            Pᵪᵧ,
+            S_chol,
+            [],
+        )
         @test K_temp ≈ K
         @test P_post.L * P_post.U ≈ KalmanFilters.calc_posterior_covariance(P, Pᵪᵧ, K, [])
     end
 
-    @testset "Time update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+    @testset "Time update with $T type $t" for T in (Float64, ComplexF64),
+        t in ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
 
         x = t.vec(randn(T, 3))
         A = t.mat(randn(T, 3, 3))
@@ -66,7 +71,8 @@
         end
     end
 
-    @testset "Measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+    @testset "Measurement update with $T type $t" for T in (Float64, ComplexF64),
+        t in ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
 
         x = t.vec(randn(T, 3))
         A = t.mat(randn(T, 3, 3))
@@ -87,13 +93,16 @@
         if x isa Vector
             h!(y, x) = mul!(y, H, x)
             mu_inter = @inferred SRUKFMUIntermediate(T, 3, 3)
-            mu_chol_inplace = @inferred measurement_update!(mu_inter, x, P_chol, y, h!, R_chol)
+            mu_chol_inplace =
+                @inferred measurement_update!(mu_inter, x, P_chol, y, h!, R_chol)
             @test @inferred(get_covariance(mu_chol_inplace)) ≈ get_covariance(mu)
             @test @inferred(get_state(mu_chol_inplace)) ≈ get_state(mu)
         end
     end
 
-    @testset "Scalar measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+    @testset "Scalar measurement update with $T type $t" for T in (Float64, ComplexF64),
+        t in ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+
         x = t.vec(randn(T, 3))
         PL = t.mat(randn(T, 3, 3))
         P = PL'PL

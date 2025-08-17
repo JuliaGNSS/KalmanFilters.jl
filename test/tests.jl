@@ -3,12 +3,14 @@
 
     unbiased_innos_scalar = randn(num_samples) .* sqrt(2)
     unbiased_variance_scalar = ones(num_samples) .* 2
-    nis_over_time_us = map((x, σ²) -> calc_nis(x, σ²), unbiased_innos_scalar, unbiased_variance_scalar)
+    nis_over_time_us =
+        map((x, σ²) -> calc_nis(x, σ²), unbiased_innos_scalar, unbiased_variance_scalar)
     @test calc_nis_test(nis_over_time_us) == true
 
     biased_innos_scalar = randn(num_samples) .* sqrt(2) .+ 1
     biased_variance_scalar = ones(num_samples) .* 2
-    nis_over_time_bs = map((x, σ²) -> calc_nis(x, σ²), biased_innos_scalar, biased_variance_scalar)
+    nis_over_time_bs =
+        map((x, σ²) -> calc_nis(x, σ²), biased_innos_scalar, biased_variance_scalar)
     @test calc_nis_test(nis_over_time_bs) == false
 
     unbiased_innos = [randn(2) .* sqrt(2) for i = 1:num_samples]
@@ -21,7 +23,7 @@
     nis_over_time_bv = map((x, σ²) -> calc_nis(x, σ²), biased_innos, biased_variance)
     @test calc_nis_test(nis_over_time_bv, num_measurements = 2) == false
 
-    A = randn(4,4)
+    A = randn(4, 4)
     P = A'A
     P_chol = cholesky(P)
     x = randn(4)

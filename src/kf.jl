@@ -11,13 +11,20 @@ struct KFMeasurementUpdate{X,P,R,S,K} <: AbstractMeasurementUpdate{X,P}
     kalman_gain::K
 end
 
-function time_update(x, P, F::Union{Number, AbstractMatrix}, Q)
+function time_update(x, P, F::Union{Number,AbstractMatrix}, Q)
     x_apri = calc_apriori_state(x, F)
     P_apri = calc_apriori_covariance(P, F, Q)
     KFTimeUpdate(x_apri, P_apri)
 end
 
-function measurement_update(x, P, y, H::Union{Number, AbstractVector, AbstractMatrix}, R; consider = nothing)
+function measurement_update(
+    x,
+    P,
+    y,
+    H::Union{Number,AbstractVector,AbstractMatrix},
+    R;
+    consider = nothing,
+)
     ỹ = calc_innovation(H, x, y)
     PHᵀ = calc_P_xy(P, H)
     S = calc_innovation_covariance(H, P, R)
@@ -43,12 +50,11 @@ struct KFTUIntermediate{T}
     fp::Matrix{T}
 end
 
-KFTUIntermediate(T::Type, num_x::Number) =
-    KFTUIntermediate(
-        Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x),
-        Matrix{T}(undef, num_x, num_x)
-    )
+KFTUIntermediate(T::Type, num_x::Number) = KFTUIntermediate(
+    Vector{T}(undef, num_x),
+    Matrix{T}(undef, num_x, num_x),
+    Matrix{T}(undef, num_x, num_x),
+)
 
 KFTUIntermediate(num_x::Number) = KFTUIntermediate(Float64, num_x)
 
@@ -70,7 +76,7 @@ function KFMUIntermediate(T::Type, num_x::Number, num_y::Number)
         Matrix{T}(undef, num_x, num_y),
         Matrix{T}(undef, num_y, num_y),
         Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x)
+        Matrix{T}(undef, num_x, num_x),
     )
 end
 

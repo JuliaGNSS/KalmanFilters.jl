@@ -25,8 +25,8 @@ end
 correct_cholesky_sign(R) = sign.(diag(R)) .* R
 
 function correct_cholesky_sign!(R)
-    for i in axes(R,1)
-        if real(R[i,i]) < 0
+    for i in axes(R, 1)
+        if real(R[i, i]) < 0
             R[i, :] = -R[i, :]
         end
     end
@@ -35,11 +35,7 @@ end
 
 # This implementation is based on
 # https://github.com/rlabbe/filterpy/blob/master/filterpy/kalman/square_root.py
-function calc_apriori_covariance(
-    P::Cholesky,
-    F::Union{Number, AbstractMatrix},
-    Q::Cholesky
-)
+function calc_apriori_covariance(P::Cholesky, F::Union{Number,AbstractMatrix}, Q::Cholesky)
     A = vcat(P.U * F', Q.U)
     R = calc_upper_triangular_of_qr(A)
     R = correct_cholesky_sign(R)
@@ -50,9 +46,9 @@ function measurement_update(
     x,
     P::Cholesky,
     y,
-    H::Union{Number, AbstractVector, AbstractMatrix},
+    H::Union{Number,AbstractVector,AbstractMatrix},
     R::Cholesky;
-    consider = nothing
+    consider = nothing,
 )
     ỹ = calc_innovation(H, x, y)
     PHᵀ, S, P_post = calc_cross_cov_innovation_posterior(P, H, R, consider)
@@ -66,13 +62,13 @@ calc_posterior_state(x, K::AbstractMatrix, ỹ::Number, consider) =
 calc_posterior_state(x, K::AbstractMatrix, ỹ::Number, consider::Nothing) =
     calc_posterior_state(x, vec(K), ỹ, consider)
 
-function create_matrix_for_qr(P::Cholesky{TP}, H, R::Cholesky{TR}) where {TP, TR}
+function create_matrix_for_qr(P::Cholesky{TP}, H, R::Cholesky{TR}) where {TP,TR}
     num_y = size(R, 1)
     num_x = size(P, 1)
     M = zeros(promote_type(TP, TR), num_y + num_x, num_y + num_x)
     M[1:num_y, 1:num_y] .= R.U
-    M[num_y + 1:end, 1:num_y] .= P.U * H'
-    M[num_y + 1:end, num_y + 1:end] .= P.U
+    M[(num_y+1):end, 1:num_y] .= P.U * H'
+    M[(num_y+1):end, (num_y+1):end] .= P.U
     M
 end
 
@@ -87,17 +83,18 @@ function calc_cross_cov_innovation_posterior(P::Cholesky, H, R::Cholesky, consid
     PHᵀ, S, P_post
 end
 
-@inline extract_cross_covariance(RU, num_y) = RU[1:num_y, num_y + 1:end]'
+@inline extract_cross_covariance(RU, num_y) = RU[1:num_y, (num_y+1):end]'
 @inline extract_innovation_covariance(RU, num_y) = Cholesky(RU[1:num_y, 1:num_y], 'U', 0)
 @inline extract_posterior_covariance(RU, num_y, P, consider::Nothing) =
-    Cholesky(RU[num_y + 1:end, num_y + 1:end], 'U', 0)
+    Cholesky(RU[(num_y+1):end, (num_y+1):end], 'U', 0)
 
 # Specializations for StaticArrays
-function create_matrix_for_qr(P::Cholesky{TP,<:SMatrix}, H::SMatrix, R::Cholesky{TR,<:SMatrix}) where {TP,TR}
-    M = vcat(
-        hcat(R.U, zero(H)),
-        hcat(P.U * H', P.U)
-    )
+function create_matrix_for_qr(
+    P::Cholesky{TP,<:SMatrix},
+    H::SMatrix,
+    R::Cholesky{TR,<:SMatrix},
+) where {TP,TR}
+    M = vcat(hcat(R.U, zero(H)), hcat(P.U * H', P.U))
     return M
 end
 
@@ -106,7 +103,12 @@ function SRange(i, j; kwargs...)
     SVector{length(r)}(r)
 end
 
-function calc_cross_cov_innovation_posterior(P::Cholesky, H::SMatrix{Dy,Dx}, R::Cholesky, consider) where {Dy,Dx}
+function calc_cross_cov_innovation_posterior(
+    P::Cholesky,
+    H::SMatrix{Dy,Dx},
+    R::Cholesky,
+    consider,
+) where {Dy,Dx}
     M = create_matrix_for_qr(P, H, R)
     RU = calc_upper_triangular_of_qr(M)
     RU = correct_cholesky_sign(RU)
@@ -133,7 +135,7 @@ function SRKFTUIntermediate(T::Type, num_x::Number)
         Matrix{T}(undef, num_x, num_x),
         qr_zeros,
         Vector{T}(undef, qr_space_length),
-        puft_vcat_q
+        puft_vcat_q,
     )
 end
 
@@ -143,11 +145,22 @@ function calc_upper_triangular_of_qr_inplace!(res, A, B, space)
     mygels!(res, A, B, space)
 end
 
-function time_update!(tu::SRKFTUIntermediate, x, P::Cholesky, F::Union{Number, AbstractMatrix}, Q::Cholesky)
+function time_update!(
+    tu::SRKFTUIntermediate,
+    x,
+    P::Cholesky,
+    F::Union{Number,AbstractMatrix},
+    Q::Cholesky,
+)
     x_apri = calc_apriori_state!(tu.x_apri, x, F)
-    tu.puft_vcat_q[1:size(F, 1),:] .= @~ P.U * F'
-    tu.puft_vcat_q[size(F, 1) + 1:end,:] .= Q.U
-    R = calc_upper_triangular_of_qr_inplace!(tu.p_apri, tu.puft_vcat_q, tu.qr_zeros, tu.qr_space)
+    tu.puft_vcat_q[1:size(F, 1), :] .= @~ P.U * F'
+    tu.puft_vcat_q[(size(F, 1)+1):end, :] .= Q.U
+    R = calc_upper_triangular_of_qr_inplace!(
+        tu.p_apri,
+        tu.puft_vcat_q,
+        tu.qr_zeros,
+        tu.qr_space,
+    )
     correct_cholesky_sign!(R)
     P_apri = Cholesky(R, 'U', 0)
     KFTimeUpdate(x_apri, P_apri)
@@ -174,7 +187,7 @@ function SRKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
         qr_zeros,
         Vector{T}(undef, qr_space_length),
         Matrix{T}(undef, num_x + num_y, num_x + num_y),
-        Vector{T}(undef, num_x)
+        Vector{T}(undef, num_x),
     )
 end
 
@@ -185,22 +198,22 @@ function measurement_update!(
     x,
     P::Cholesky,
     y,
-    H::Union{Number, AbstractVector, AbstractMatrix},
-    R::Cholesky
+    H::Union{Number,AbstractVector,AbstractMatrix},
+    R::Cholesky,
 )
     ỹ = calc_innovation!(mu.innovation, H, x, y)
     dim_y = length(y)
     M = mu.m
     M[1:dim_y, 1:dim_y] .= R.U
-    M[dim_y + 1:end, 1:dim_y] .= @~ P.U * H'
-    M[dim_y + 1:end, dim_y + 1:end] .= P.U
+    M[(dim_y+1):end, 1:dim_y] .= @~ P.U * H'
+    M[(dim_y+1):end, (dim_y+1):end] .= P.U
     RU = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_zeros, mu.qr_space)
     correct_cholesky_sign!(RU)
-    PHᵀ = (@view(RU[1:dim_y, dim_y + 1:end]))'
+    PHᵀ = (@view(RU[1:dim_y, (dim_y+1):end]))'
     S = Cholesky(@view(RU[1:dim_y, 1:dim_y]), 'U', 0)
     K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, S.L)
     x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)
-    P_post = Cholesky(@view(RU[dim_y + 1:end, dim_y + 1:end]), 'U', 0)
+    P_post = Cholesky(@view(RU[(dim_y+1):end, (dim_y+1):end]), 'U', 0)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
 end
 
