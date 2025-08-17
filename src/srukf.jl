@@ -1,4 +1,4 @@
-struct SRUKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T}, Augmented{Matrix{T}, Matrix{T}}}}
+struct SRUKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix{T}}}}
     P_chol::AS
     xi_temp::X
     transformed_x0_temp::Vector{T}
@@ -20,19 +20,27 @@ function SRUKFTUIntermediate(T::Type, num_x::Number)
         Matrix{T}(undef, num_x, num_x),
         xi_temp,
         xi_temp,
-        TransformedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, 2 * num_x), MeanSetWeightingParameters(0.0)), # Weighting parameters will be reset
-        TransformedSigmaPoints(Vector{T}(undef, num_x), Matrix{T}(undef, num_x, 2 * num_x), MeanSetWeightingParameters(0.0)),
+        TransformedSigmaPoints(
+            Vector{T}(undef, num_x),
+            Matrix{T}(undef, num_x, 2 * num_x),
+            MeanSetWeightingParameters(0.0),
+        ), # Weighting parameters will be reset
+        TransformedSigmaPoints(
+            Vector{T}(undef, num_x),
+            Matrix{T}(undef, num_x, 2 * num_x),
+            MeanSetWeightingParameters(0.0),
+        ),
         qr_zeros,
         Vector{T}(undef, qr_space_length),
         qr_A,
         Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x)
+        Matrix{T}(undef, num_x, num_x),
     )
 end
 
 SRUKFTUIntermediate(num_x::Number) = SRUKFTUIntermediate(Float64, num_x)
 
-struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T}, Augmented{Matrix{T}, Matrix{T}}}}
+struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix{T}}}}
     P_chol::AS
     xi_temp::X
     y_est::Vector{T}
@@ -59,22 +67,30 @@ function SRUKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
         Vector{T}(undef, num_x),
         Vector{T}(undef, num_y),
         Vector{T}(undef, num_y),
-        TransformedSigmaPoints(Vector{T}(undef, num_y), Matrix{T}(undef, num_y, 2 * num_x), MeanSetWeightingParameters(0.0)), # Weighting parameters will be reset
-        TransformedSigmaPoints(Vector{T}(undef, num_y), Matrix{T}(undef, num_y, 2 * num_x), MeanSetWeightingParameters(0.0)),
+        TransformedSigmaPoints(
+            Vector{T}(undef, num_y),
+            Matrix{T}(undef, num_y, 2 * num_x),
+            MeanSetWeightingParameters(0.0),
+        ), # Weighting parameters will be reset
+        TransformedSigmaPoints(
+            Vector{T}(undef, num_y),
+            Matrix{T}(undef, num_y, 2 * num_x),
+            MeanSetWeightingParameters(0.0),
+        ),
         Vector{T}(undef, num_y),
         qr_zeros,
         Vector{T}(undef, qr_space_length),
         qr_A,
         Matrix{T}(undef, num_y, num_y),
         Matrix{T}(undef, num_x, num_y),
-        Matrix{T}(undef, num_x, num_y),  
+        Matrix{T}(undef, num_x, num_y),
         Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x)
+        Matrix{T}(undef, num_x, num_x),
     )
 end
 
-SRUKFMUIntermediate(num_x::Number, num_y::Number) = SRUKFMUIntermediate(Float64, num_x, num_y)
-
+SRUKFMUIntermediate(num_x::Number, num_y::Number) =
+    SRUKFMUIntermediate(Float64, num_x, num_y)
 
 function cov(χ::TransformedSigmaPoints, noise::Cholesky)
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
@@ -90,10 +106,18 @@ function cov(χ::TransformedSigmaPoints, noise::Cholesky)
     P
 end
 
-function cov!(res, qr_A, qr_zeros, qr_space, x0_temp, χ::TransformedSigmaPoints, noise::Cholesky)
+function cov!(
+    res,
+    qr_A,
+    qr_zeros,
+    qr_space,
+    x0_temp,
+    χ::TransformedSigmaPoints,
+    noise::Cholesky,
+)
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     qr_A[1:size(χ.xi, 2), :] .= sqrt(weight_i) .* χ.xi'
-    qr_A[size(χ.xi, 2) + 1:end, :] = noise.uplo === 'U' ? noise.U : noise.L'
+    qr_A[(size(χ.xi, 2)+1):end, :] = noise.uplo === 'U' ? noise.U : noise.L'
     R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_zeros, qr_space)
     correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
@@ -120,7 +144,15 @@ function cov(χ::TransformedSigmaPoints, noise::Augment{<:Cholesky})
     P
 end
 
-function cov!(res, qr_A, qr_zeros, qr_space, x0_temp, χ::TransformedSigmaPoints, noise::Augment{<:Cholesky})
+function cov!(
+    res,
+    qr_A,
+    qr_zeros,
+    qr_space,
+    x0_temp,
+    χ::TransformedSigmaPoints,
+    noise::Augment{<:Cholesky},
+)
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     qr_A .= sqrt(weight_i) .* χ.xi'
     R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_zeros, qr_space)
@@ -135,16 +167,31 @@ function cov!(res, qr_A, qr_zeros, qr_space, x0_temp, χ::TransformedSigmaPoints
     S
 end
 
-function calc_kalman_gain_and_posterior_covariance(P::Cholesky, Pᵪᵧ, S::Cholesky, consider::Nothing)
+function calc_kalman_gain_and_posterior_covariance(
+    P::Cholesky,
+    Pᵪᵧ,
+    S::Cholesky,
+    consider::Nothing,
+)
     U = S.uplo === 'U' ? Pᵪᵧ / S.U : Pᵪᵧ / S.L'
     K = S.uplo === 'U' ? U / S.U' : U / S.L
     # StaticArrays doesn't support lowrankdowndate
     # see https://github.com/JuliaArrays/StaticArrays.jl/issues/930
-    P_post = reduce(lowrankdowndate, eachcol(U), init = Cholesky(Matrix(P.factors), P.uplo, P.info))
+    P_post = reduce(
+        lowrankdowndate,
+        eachcol(U);
+        init = Cholesky(Matrix(P.factors), P.uplo, P.info),
+    )
     K, P_post
 end
 
-function calc_kalman_gain_and_posterior_covariance!(U, P_post, P::Cholesky, Pᵪᵧ, S::Cholesky)
+function calc_kalman_gain_and_posterior_covariance!(
+    U,
+    P_post,
+    P::Cholesky,
+    Pᵪᵧ,
+    S::Cholesky,
+)
     U .= S.uplo === 'U' ? rdiv!(Pᵪᵧ, S.U) : rdiv!(Pᵪᵧ, S.L')
     K = S.uplo === 'U' ? rdiv!(Pᵪᵧ, S.U') : rdiv!(Pᵪᵧ, S.L)
     P_post .= P.factors
@@ -153,32 +200,80 @@ function calc_kalman_gain_and_posterior_covariance!(U, P_post, P::Cholesky, Pᵪ
     K, P_chol
 end
 
-function calc_kalman_gain_and_posterior_covariance(P::Augmented{<:Cholesky}, Pᵪᵧ, S::Cholesky, consider)
+function calc_kalman_gain_and_posterior_covariance(
+    P::Augmented{<:Cholesky},
+    Pᵪᵧ,
+    S::Cholesky,
+    consider,
+)
     calc_kalman_gain_and_posterior_covariance(P.P, Pᵪᵧ, S, consider)
 end
 
-function calc_kalman_gain_and_posterior_covariance!(U, P_post, P::Augmented{<:Cholesky}, Pᵪᵧ, S::Cholesky)
+function calc_kalman_gain_and_posterior_covariance!(
+    U,
+    P_post,
+    P::Augmented{<:Cholesky},
+    Pᵪᵧ,
+    S::Cholesky,
+)
     calc_kalman_gain_and_posterior_covariance!(U, P_post, P.P, Pᵪᵧ, S)
 end
 
-function time_update!(tu::SRUKFTUIntermediate, x, P, f!, Q; weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
+function time_update!(
+    tu::SRUKFTUIntermediate,
+    x,
+    P,
+    f!,
+    Q;
+    weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
+)
     χₖ₋₁ = calc_sigma_points!(tu.P_chol, x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform!(tu.transformed_sigma_points, tu.xi_temp, f!, χₖ₋₁)
     x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
     unbiased_χₖ₍ₖ₋₁₎ = substract_mean!(tu.unbiased_sigma_points, χₖ₍ₖ₋₁₎, x_apri)
-    P_apri = cov!(tu.p_apri, tu.qr_A, tu.qr_zeros, tu.qr_space, tu.transformed_x0_temp, unbiased_χₖ₍ₖ₋₁₎, Q)
+    P_apri = cov!(
+        tu.p_apri,
+        tu.qr_A,
+        tu.qr_zeros,
+        tu.qr_space,
+        tu.transformed_x0_temp,
+        unbiased_χₖ₍ₖ₋₁₎,
+        Q,
+    )
     SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
-function measurement_update!(mu::SRUKFMUIntermediate, x, P, y, h!, R; weight_params::AbstractWeightingParameters = WanMerweWeightingParameters())
+function measurement_update!(
+    mu::SRUKFMUIntermediate,
+    x,
+    P,
+    y,
+    h!,
+    R;
+    weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
+)
     χₖ₍ₖ₋₁₎ = calc_sigma_points!(mu.P_chol, x, P, weight_params)
     𝓨 = transform!(mu.transformed_sigma_points, mu.xi_temp, h!, χₖ₍ₖ₋₁₎)
     y_est = mean!(mu.y_est, 𝓨)
     unbiased_𝓨 = substract_mean!(mu.unbiased_sigma_points, 𝓨, y_est)
-    S = cov!(mu.innovation_covariance, mu.qr_A, mu.qr_zeros, mu.qr_space, mu.transformed_x0_temp, unbiased_𝓨, R)
+    S = cov!(
+        mu.innovation_covariance,
+        mu.qr_A,
+        mu.qr_zeros,
+        mu.qr_space,
+        mu.transformed_x0_temp,
+        unbiased_𝓨,
+        R,
+    )
     mu.ỹ .= y .- y_est
     Pᵪᵧ = cov!(mu.cross_covariance, χₖ₍ₖ₋₁₎, unbiased_𝓨)
-    K, P_posterior = calc_kalman_gain_and_posterior_covariance!(mu.kalman_gain, mu.p_posterior, P, Pᵪᵧ, S)
+    K, P_posterior = calc_kalman_gain_and_posterior_covariance!(
+        mu.kalman_gain,
+        mu.p_posterior,
+        P,
+        Pᵪᵧ,
+        S,
+    )
     x_posterior = calc_posterior_state!(mu.x_posterior, x, K, mu.ỹ)
     SPMeasurementUpdate(x_posterior, P_posterior, 𝓨, mu.ỹ, S, K)
 end

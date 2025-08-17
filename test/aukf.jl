@@ -1,6 +1,6 @@
 @testset "Augmented Unscented Kalman filter" begin
-    
-    @testset "Time update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+    @testset "Time update with $T type $t" for T in (Float64, ComplexF64),
+        t in ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
 
         x = t.vec(randn(T, 3))
         A = t.mat(randn(T, 3, 3))
@@ -18,7 +18,7 @@
 
         if x isa Vector
             f!(y, x) = mul!(y, F, x)
-            f!(y, x, noise) = y.= @~ F * x .+ noise
+            f!(y, x, noise) = y .= @~ F * x .+ noise
             tu_inter = AUKFTUIntermediate(T, 3)
             tu_aug_inplace = time_update!(tu_inter, x, P, f!, Augment(Q))
             @test get_covariance(tu_aug_inplace) ≈ get_covariance(tu)
@@ -26,7 +26,8 @@
         end
     end
 
-    @testset "Measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+    @testset "Measurement update with $T type $t" for T in (Float64, ComplexF64),
+        t in ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
 
         x = t.vec(randn(T, 3))
         A = t.mat(randn(T, 3, 3))
@@ -51,7 +52,9 @@
         @test get_state(mu_ukf_inplace) ≈ get_state(mu)
     end
 
-    @testset "Scalar measurement update with $T type $t" for T = (Float64, ComplexF64), t = ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+    @testset "Scalar measurement update with $T type $t" for T in (Float64, ComplexF64),
+        t in ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
+
         x = t.vec(randn(T, 3))
         PL = t.mat(randn(T, 3, 3))
         P = PL'PL

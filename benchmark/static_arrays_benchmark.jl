@@ -31,10 +31,22 @@ using BenchmarkTools
 println("StaticArrays:")
 res_static = @benchmark begin
     tu = time_update($x_init, $P_init_chol, $F, $Q_chol)
-    mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), $measurement, $H, $R_chol)
-    for i in 1:100
+    mu = measurement_update(
+        get_state(tu),
+        get_sqrt_covariance(tu),
+        $measurement,
+        $H,
+        $R_chol,
+    )
+    for i = 1:100
         tu = time_update(get_state(tu), get_sqrt_covariance(tu), $F, $Q_chol)
-        mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), $measurement, $H, $R_chol)
+        mu = measurement_update(
+            get_state(tu),
+            get_sqrt_covariance(tu),
+            $measurement,
+            $H,
+            $R_chol,
+        )
     end
 end
 display(res_static)
@@ -57,10 +69,22 @@ R_chol_reg = cholesky(R_reg)
 
 res_regular = @benchmark begin
     tu = time_update($x_init_reg, $P_init_chol_reg, $F_reg, $Q_chol_reg)
-    mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), $measurement_reg, $H_reg, $R_chol_reg)
-    for i in 1:100
+    mu = measurement_update(
+        get_state(tu),
+        get_sqrt_covariance(tu),
+        $measurement_reg,
+        $H_reg,
+        $R_chol_reg,
+    )
+    for i = 1:100
         tu = time_update(get_state(tu), get_sqrt_covariance(tu), $F_reg, $Q_chol_reg)
-        mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), $measurement_reg, $H_reg, $R_chol_reg)
+        mu = measurement_update(
+            get_state(tu),
+            get_sqrt_covariance(tu),
+            $measurement_reg,
+            $H_reg,
+            $R_chol_reg,
+        )
     end
 end
 display(res_regular)
