@@ -22,7 +22,7 @@ FFTW = "1.0"
 ForwardDiff = "1.0.1"
 LazyArrays = "0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.20, 0.21, 0.22, 1.0, 2.0"
 StaticArrays = "1.0"
-julia = "1.7"
+julia = "1.10"
 
 [extras]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
