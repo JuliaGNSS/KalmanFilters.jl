@@ -76,7 +76,7 @@ tu = time_update(x, P, jacobian_preparation, Q)
 The same applies for the measurement update:
 ```julia
 jacobian_preparation = JacobianPreparation(h, zero(x))
-mu = measurement_update(get_state(tu), get_covariance(tu), measurement jacobian_preparation, R)
+mu = measurement_update(get_state(tu), get_covariance(tu), measurement, jacobian_preparation, R)
 ```
 The preparation only needs to be done once upfront. It's part of an optimization procedure
 to reduce recalculation of the derivatives. 
