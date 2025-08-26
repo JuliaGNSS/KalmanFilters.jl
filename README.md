@@ -7,6 +7,7 @@ Provides multiple Kalman Filters
 * (Square Root) Kalman Filter ((SR-)KF)
 * (Square Root) Unscented Kalman Filter ((SR-)UKF)
 * (Square Root) Augment Unscented Kalman Filter ((SR-)AUKF)
+* Extended Kalman Filter (EKF)
 
 All filter implementation support the real and complexed valued inputs.
 
@@ -24,6 +25,14 @@ KalmanFilters.jl has very flexible structure. For example you are free to choose
 The distinction between the different Kalman-Filters is made by the input types:
 If the model is defined by a matrix, the linear Kalman-Filter will be used. If the model is defined by a function or a [functor](https://docs.julialang.org/en/v1/manual/methods/#Function-like-objects) (in case you need to pass additional information), the implementation will assume, that the model is non-linear, and will, therefore, use the Unscented-Kalman-Filter.
 If you’d like to augment the noise covariance, you will have to wrap the noise covariance by the `Augment` type.
+
+It is also possible to use the Extended Kalman Filter by providing a `GradientOrJacobianPreparation` object to the process or measurement model. The `GradientOrJacobianPreparation` object can be created in the following way:
+
+1. with `JacobianPreparation(f, zero(x))` if your function `f` returns a vector
+2. with `GradientPreparation(f, zero(x))` if your function `f` returns a scalar
+
+where f is the function to be differentiated and `x` the state vector.
+The state vector doesn't need to hold actual data, but can be zero. The preparation only needs to be done once upfront
 
 ### Linear case
 The linear Kalman Filter will be applied if you pass the process model `F` or the measurement model `H` as matrices to the functions `time_update` or `measurement_update` respectively.
@@ -58,6 +67,19 @@ If you define the process model `F` or the measurement model `H` as a function (
 F(x) = x .* [1., 2.]
 tu = time_update(x, P, F, Q)
 ```
+
+If you want to use the Extended Kalman Filter instead, you'll have to create the `JacobianPreparation` or `GradientPreparation` depending on the output type of your function `f` e.g.:
+```julia
+jacobian_preparation = JacobianPreparation(f, zero(x))
+tu = time_update(x, P, jacobian_preparation, Q)
+```
+The same applies for the measurement update:
+```julia
+jacobian_preparation = JacobianPreparation(h, zero(x))
+mu = measurement_update(get_state(tu), get_covariance(tu), measurement, jacobian_preparation, R)
+```
+The preparation only needs to be done once upfront. It's part of an optimization procedure
+to reduce recalculation of the derivatives. 
 
 ### Augmentation
 KalmanFilters also allows to augment the noise-covariances:
