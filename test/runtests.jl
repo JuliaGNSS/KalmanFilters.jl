@@ -3,6 +3,7 @@ using Test, KalmanFilters, Random, LinearAlgebra, LazyArrays, Statistics, FFTW, 
 Random.seed!(1234)
 
 include("kf.jl")
+include("ekf.jl")
 include("srkf.jl")
 include("sigmapoints.jl")
 include("augmented_sigmapoints.jl")

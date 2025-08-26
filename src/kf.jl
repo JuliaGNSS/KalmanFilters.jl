@@ -11,12 +11,22 @@ struct KFMeasurementUpdate{X,P,R,S,K} <: AbstractMeasurementUpdate{X,P}
     kalman_gain::K
 end
 
+"""
+$(SIGNATURES)
+
+Kalman Filter time update.
+"""
 function time_update(x, P, F::Union{Number,AbstractMatrix}, Q)
     x_apri = calc_apriori_state(x, F)
     P_apri = calc_apriori_covariance(P, F, Q)
     KFTimeUpdate(x_apri, P_apri)
 end
 
+"""
+$(SIGNATURES)
+
+Kalman Filter measurement update.
+"""
 function measurement_update(
     x,
     P,
