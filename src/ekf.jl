@@ -1,8 +1,8 @@
-struct GradientOrJacobianPreparation{P<:DifferentiationInterface.Prep,F,B}
+struct GradientOrJacobianPreparation{P<:DifferentiationInterface.Prep,F,B,C}
     f::F
     preparation::P
     backend::B
-    contexts
+    contexts::C
 end
 
 """
@@ -18,8 +18,18 @@ The type must match with the type of your state vector. With contexts,
 parameters can be provided that will be passed alongside the state vector
 to the function f.
 """
-function JacobianPreparation(f, x::AbstractVector; backend=AutoForwardDiff(), contexts=nothing)
-    GradientOrJacobianPreparation(f, prepare_jacobian(f, backend, x, Constant(contexts)), backend, contexts)
+function JacobianPreparation(
+    f,
+    x::AbstractVector,
+    contexts::Vararg{DifferentiationInterface.Context,C};
+    backend = AutoForwardDiff(),
+) where {C}
+    GradientOrJacobianPreparation(
+        f,
+        prepare_jacobian(f, backend, x, contexts...),
+        backend,
+        contexts,
+    )
 end
 
 """
@@ -29,8 +39,18 @@ GradientPreparation calculates the gradient automatically. In contrast to
 JacobianPreparation the function `f` needs to be a scalar instead of a vector.
 See JacobianPreparation for more information.
 """
-function GradientPreparation(f, x::AbstractVector, backend=AutoForwardDiff(), contexts=nothing)
-    GradientOrJacobianPreparation(f, prepare_gradient(f, backend, x, Constant(contexts)), backend, contexts)
+function GradientPreparation(
+    f,
+    x::AbstractVector,
+    contexts::Vararg{DifferentiationInterface.Context,C};
+    backend = AutoForwardDiff(),
+) where {C}
+    GradientOrJacobianPreparation(
+        f,
+        prepare_gradient(f, backend, x, contexts...),
+        backend,
+        contexts,
+    )
 end
 
 """
@@ -40,8 +60,11 @@ GradientOrJacobianContextUpdate allows to change the context parameters.
 The type of contexts must match with the context parameter provided for
 JacobianPreparation.
 """
-function GradientOrJacobianContextUpdate(F::GradientOrJacobianPreparation, contexts)
-    GradientOrJacobianPreparation(F.f, F.preparation, F.backend, contexts)
+function GradientOrJacobianContextUpdate(
+    F::GradientOrJacobianPreparation,
+    contexts::Vararg{DifferentiationInterface.Context,C},
+) where {C}
+    GradientOrJacobianPreparation(F.f, F.preparation, F.backend, contexts...)
 end
 
 """
@@ -51,18 +74,25 @@ Extended Kalman Filter time update.
 F is the GradientOrJacobianPreparation object.
 """
 function time_update(x, P, F::GradientOrJacobianPreparation, Q)
-    F.preparation isa DifferentiationInterface.GradientPrep && error("Gradient is currently not supported for the time update.")
-    x_apri, jacobian = value_and_jacobian(F.f, F.preparation, F.backend, x, F.contexts)
+    F.preparation isa DifferentiationInterface.GradientPrep &&
+        error("Gradient is currently not supported for the time update.")
+    x_apri, jacobian = value_and_jacobian(F.f, F.preparation, F.backend, x, F.contexts...)
     P_apri = calc_apriori_covariance(P, jacobian, Q)
     KFTimeUpdate(x_apri, P_apri)
 end
 
-function value_and_gradient_or_jacobian(F::GradientOrJacobianPreparation{<:DifferentiationInterface.JacobianPrep}, x)
-    value_and_jacobian(F.f, F.preparation, F.backend, x, Constant(F.contexts))
+function value_and_gradient_or_jacobian(
+    F::GradientOrJacobianPreparation{<:DifferentiationInterface.JacobianPrep},
+    x,
+)
+    value_and_jacobian(F.f, F.preparation, F.backend, x, F.contexts...)
 end
 
-function value_and_gradient_or_jacobian(F::GradientOrJacobianPreparation{<:DifferentiationInterface.GradientPrep}, x)
-    value, gradient = value_and_gradient(F.f, F.preparation, F.backend, x, F.contexts)
+function value_and_gradient_or_jacobian(
+    F::GradientOrJacobianPreparation{<:DifferentiationInterface.GradientPrep},
+    x,
+)
+    value, gradient = value_and_gradient(F.f, F.preparation, F.backend, x, F.contexts...)
     return value, transpose(gradient)
 end
 
@@ -72,7 +102,14 @@ $(SIGNATURES)
 Extended Kalman Filter measurement update.
 H is the GradientOrJacobianPreparation object.
 """
-function measurement_update(x, P, y, H::GradientOrJacobianPreparation, R; consider=nothing)
+function measurement_update(
+    x,
+    P,
+    y,
+    H::GradientOrJacobianPreparation,
+    R;
+    consider = nothing,
+)
     y_pre, gradient_or_jacobian = value_and_gradient_or_jacobian(H, x)
     ỹ = calc_innovation(y_pre, y)
     PHᵀ = calc_P_xy(P, gradient_or_jacobian)
