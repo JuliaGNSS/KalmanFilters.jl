@@ -115,9 +115,10 @@ function measurement_update(
     PHᵀ = calc_P_xy(P, gradient_or_jacobian)
     S = calc_innovation_covariance(gradient_or_jacobian, P, R)
     K = calc_kalman_gain(PHᵀ, S, consider)
-    x_post = calc_posterior_state(x, K, ỹ, consider)
+    x̃ = calc_state_correction(K, ỹ)
+    x_post = calc_posterior_state(x, x̃, consider)
     P_post = calc_posterior_covariance(P, PHᵀ, K, consider)
-    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+    KFMeasurementUpdate(x_post, P_post, ỹ, S, K, x̃)
 end
 
 calc_innovation(y_pre, y) = y - y_pre

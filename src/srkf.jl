@@ -53,9 +53,16 @@ function measurement_update(
     ỹ = calc_innovation(H, x, y)
     PHᵀ, S, P_post = calc_cross_cov_innovation_posterior(P, H, R, consider)
     K = calc_kalman_gain(PHᵀ, S.L, consider)
-    x_post = calc_posterior_state(x, K, ỹ, consider)
-    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+    x̃ = calc_state_correction(K, ỹ)
+    if typeof(x) <: SVector
+        x̃ = SVector{length(x)}(x̃)
+    end
+    x_post = calc_posterior_state(x, x̃, consider)
+    KFMeasurementUpdate(x_post, P_post, ỹ, S, K, x̃)
 end
+
+calc_state_correction(K::AbstractMatrix, ỹ::Number) =
+    calc_state_correction(vec(K), ỹ)
 
 calc_posterior_state(x, K::AbstractMatrix, ỹ::Number, consider) =
     calc_posterior_state(x, vec(K), ỹ, consider)
@@ -174,6 +181,7 @@ struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     qr_space::Vector{T}
     R::Matrix{T}
     x_posterior::Vector{T}
+    x_correction::Vector{T}
 end
 
 function SRKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
@@ -187,6 +195,7 @@ function SRKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
         qr_zeros,
         Vector{T}(undef, qr_space_length),
         Matrix{T}(undef, num_x + num_y, num_x + num_y),
+        Vector{T}(undef, num_x),
         Vector{T}(undef, num_x),
     )
 end
@@ -212,9 +221,10 @@ function measurement_update!(
     PHᵀ = (@view(RU[1:dim_y, (dim_y+1):end]))'
     S = Cholesky(@view(RU[1:dim_y, 1:dim_y]), 'U', 0)
     K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, S.L)
-    x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)
+    x̃ = calc_state_correction!(mu.x_correction, K, ỹ)
+    x_post = calc_posterior_state!(mu.x_posterior, x, x̃)
     P_post = Cholesky(@view(RU[(dim_y+1):end, (dim_y+1):end]), 'U', 0)
-    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+    KFMeasurementUpdate(x_post, P_post, ỹ, S, K, x̃)
 end
 
 function calc_kalman_gain!(K, PHᵀ, SL::LowerTriangular)

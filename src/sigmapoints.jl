@@ -102,6 +102,7 @@ struct SPMeasurementUpdate{X,P,O,I,IC,K} <: AbstractMeasurementUpdate{X,P}
     innovation::I
     innovation_covariance::IC
     kalman_gain::K
+    state_correction::X
 end
 
 abstract type AbstractSigmaPoints{T} <: AbstractMatrix{T} end

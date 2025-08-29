@@ -33,6 +33,12 @@
         @test KalmanFilters.calc_kalman_gain!(S_lu, K, PHᵀ, S) ≈ PHᵀ / S
 
         x = randn(2)
+        x_correction = similar(x)
+        K = randn(2, 2)
+        ỹ = randn(2)
+        @test KalmanFilters.calc_state_correction!(x_correction, K, ỹ) ≈ K * ỹ
+
+        x = randn(2)
         x_posterior = similar(x)
         K = randn(2, 2)
         ỹ = randn(2)

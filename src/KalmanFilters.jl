@@ -43,6 +43,7 @@ export WanMerweWeightingParameters,
     get_innovation,
     get_innovation_covariance,
     get_kalman_gain,
+    get_state_correction,
     get_sqrt_covariance,
     get_sqrt_innovation_covariance,
     time_update,
@@ -73,6 +74,7 @@ end
 get_innovation(kf::AbstractMeasurementUpdate) = kf.innovation
 get_innovation_covariance(kf::AbstractMeasurementUpdate) = kf.innovation_covariance
 get_kalman_gain(kf::AbstractMeasurementUpdate) = kf.kalman_gain
+get_state_correction(kf::AbstractMeasurementUpdate) = kf.state_correction
 
 function get_covariance(kf::AbstractUpdate{X,P}) where {X,P<:Cholesky}
     kf.covariance.L * kf.covariance.U

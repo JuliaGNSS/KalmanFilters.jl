@@ -56,6 +56,7 @@ struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
     kalman_gain::Matrix{T}
     x_posterior::Vector{T}
     p_posterior::Matrix{T}
+    x_correction::Vector{T}
 end
 
 function SRUKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
@@ -86,6 +87,7 @@ function SRUKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
         Matrix{T}(undef, num_x, num_y),
         Vector{T}(undef, num_x),
         Matrix{T}(undef, num_x, num_x),
+        Vector{T}(undef, num_x),
     )
 end
 
@@ -274,6 +276,7 @@ function measurement_update!(
         Pᵪᵧ,
         S,
     )
-    x_posterior = calc_posterior_state!(mu.x_posterior, x, K, mu.ỹ)
-    SPMeasurementUpdate(x_posterior, P_posterior, 𝓨, mu.ỹ, S, K)
+    x̃ = calc_state_correction!(mu.x_correction, K, mu.ỹ)
+    x_posterior = calc_posterior_state!(mu.x_posterior, x, x̃)
+    SPMeasurementUpdate(x_posterior, P_posterior, 𝓨, mu.ỹ, S, K, x̃)
 end

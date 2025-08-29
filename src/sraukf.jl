@@ -55,6 +55,7 @@ function SRAUKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
         Matrix{T}(undef, num_x, num_y),
         Vector{T}(undef, num_x),
         Matrix{T}(undef, num_x, num_x),
+        Vector{T}(undef, num_x),
     )
 end
 

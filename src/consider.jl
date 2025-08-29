@@ -3,11 +3,15 @@
     PHᵀ[not_consider, :] / S
 end
 
-@inline function calc_posterior_state(x, K, ỹ, consider::AbstractVector)
+@inline function calc_posterior_state(x, x̃, consider::AbstractVector)
     not_consider = filter(i -> !(i in consider), 1:length(x))
     x_post = copy(x)
-    x_post[not_consider] = x[not_consider] + K * ỹ
+    x_post[not_consider] = x[not_consider] + x̃
     x_post
+end
+
+@inline function calc_posterior_state(x, K, ỹ, consider::AbstractVector)
+    calc_posterior_state(x, K * ỹ, consider::AbstractVector)
 end
 
 @inline function calc_posterior_covariance(P, PHᵀ, K, consider::AbstractVector)
