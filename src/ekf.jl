@@ -64,7 +64,7 @@ function GradientOrJacobianContextUpdate(
     F::GradientOrJacobianPreparation,
     contexts::Vararg{DifferentiationInterface.Context,C},
 ) where {C}
-    GradientOrJacobianPreparation(F.f, F.preparation, F.backend, contexts...)
+    GradientOrJacobianPreparation(F.f, F.preparation, F.backend, contexts)
 end
 
 """
