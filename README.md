@@ -152,6 +152,19 @@ In same cases the inplace variant is slower than the allocating variant. More in
 
 Every pull request is benchmarked against its base branch with [AirspeedVelocity.jl](https://github.com/MilesCranmer/AirspeedVelocity.jl) and the results are posted as a PR comment. The benchmark suite lives in `benchmark/benchmarks.jl`.
 
+## Trimmed executables
+
+Every filter, in-place and allocating, compiles into a `juliac --trim=safe`
+executable; `test/trim` checks that on CI. Two things are up to the caller:
+
+- pass the process and measurement models as [functors](https://docs.julialang.org/en/v1/manual/methods/#Function-like-objects)
+  or closures over local variables, not closures over non-constant globals, whose
+  calls cannot be resolved statically;
+- for the Extended Kalman Filter on a `Vector` state, fix the ForwardDiff chunk size,
+  e.g. `JacobianPreparation(f, zero(x); backend = AutoForwardDiff(; chunksize = 4))`
+  — the default picks it from `length(x)` at run time, which is not inferable — and
+  load ForwardDiff, whose backend is a DifferentiationInterface extension.
+
 ## License
 
 MIT License

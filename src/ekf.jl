@@ -17,6 +17,11 @@ It doesn't need to hold actual values. You can pass e.g. `zeros(num_x)`.
 The type must match with the type of your state vector. With contexts,
 parameters can be provided that will be passed alongside the state vector
 to the function f.
+
+For a `Vector` state the default `AutoForwardDiff()` picks its chunk size from
+`length(x)` at run time, which leaves the prepared Jacobian's type uninferable.
+Pass `backend = AutoForwardDiff(; chunksize = length(x))` with a constant chunk
+size where that matters, e.g. for a `juliac --trim` build.
 """
 function JacobianPreparation(
     f,
