@@ -117,7 +117,13 @@ function cov!(
 )
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     qr_A[1:size(χ.xi, 2), :] .= sqrt(weight_i) .* χ.xi'
-    qr_A[(size(χ.xi, 2)+1):end, :] = noise.uplo === 'U' ? noise.U : noise.L'
+    # Wrap `factors` directly: `Cholesky`'s `U`/`L` properties are type-unstable (their
+    # argument is a `Matrix`/`Adjoint` union), so they allocate a wrapper on every call.
+    if noise.uplo === 'U'
+        qr_A[(size(χ.xi, 2)+1):end, :] = UpperTriangular(noise.factors)
+    else
+        qr_A[(size(χ.xi, 2)+1):end, :] = LowerTriangular(noise.factors)'
+    end
     R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_zeros, qr_space)
     correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
@@ -192,8 +198,16 @@ function calc_kalman_gain_and_posterior_covariance!(
     Pᵪᵧ,
     S::Cholesky,
 )
-    U .= S.uplo === 'U' ? rdiv!(Pᵪᵧ, S.U) : rdiv!(Pᵪᵧ, S.L')
-    K = S.uplo === 'U' ? rdiv!(Pᵪᵧ, S.U') : rdiv!(Pᵪᵧ, S.L)
+    # Wrap `factors` directly to keep the factor types concrete (see `cov!`).
+    if S.uplo === 'U'
+        S_U = UpperTriangular(S.factors)
+        U .= rdiv!(Pᵪᵧ, S_U)
+        K = rdiv!(Pᵪᵧ, S_U')
+    else
+        S_L = LowerTriangular(S.factors)
+        U .= rdiv!(Pᵪᵧ, S_L')
+        K = rdiv!(Pᵪᵧ, S_L)
+    end
     P_post .= P.factors
     P_chol = Cholesky(P_post, P.uplo, P.info)
     foreach(u -> lowrankdowndate!(P_chol, u), eachcol(U))
@@ -223,10 +237,10 @@ function time_update!(
     tu::SRUKFTUIntermediate,
     x,
     P,
-    f!,
+    f!::F,
     Q;
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
-)
+) where {F}
     χₖ₋₁ = calc_sigma_points!(tu.P_chol, x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform!(tu.transformed_sigma_points, tu.xi_temp, f!, χₖ₋₁)
     x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
@@ -248,10 +262,10 @@ function measurement_update!(
     x,
     P,
     y,
-    h!,
+    h!::F,
     R;
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
-)
+) where {F}
     χₖ₍ₖ₋₁₎ = calc_sigma_points!(mu.P_chol, x, P, weight_params)
     𝓨 = transform!(mu.transformed_sigma_points, mu.xi_temp, h!, χₖ₍ₖ₋₁₎)
     y_est = mean!(mu.y_est, 𝓨)
