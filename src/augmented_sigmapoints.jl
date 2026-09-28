@@ -187,12 +187,18 @@ function cov!(P, χ::AugmentedSigmaPoints, unbiased_𝓨::TransformedSigmaPoints
     weight_0, weight_i = calc_cov_weights(χ)
     num_states = length(χ.x0)
     num_noise_states = size(χ.noise_chol, 2)
-    P .= @~ χ.P_chol * (@view(unbiased_𝓨.xi[:, 1:num_states]))'
-    P .-= @~ χ.P_chol *
-       (@view(
-        unbiased_𝓨.xi[:, (num_states+num_noise_states+1):(2*num_states+num_noise_states)]
-    ))'
-    P .*= weight_i
+    # P_chol * (A - B)' * weight_i with a single triangular multiply
+    P .=
+        weight_i .* (
+            (@view(unbiased_𝓨.xi[:, 1:num_states]))' .-
+            (@view(
+                unbiased_𝓨.xi[
+                    :,
+                    (num_states+num_noise_states+1):(2*num_states+num_noise_states),
+                ]
+            ))'
+        )
+    lmul!(χ.P_chol, P)
 end
 
 function cov(unbiased_𝓨::TransformedSigmaPoints, Q::Augment)
@@ -202,6 +208,6 @@ end
 
 function cov!(P, unbiased_𝓨::TransformedSigmaPoints, Q::Augment)
     weight_0, weight_i = calc_cov_weights(unbiased_𝓨)
-    P .= @~ unbiased_𝓨.x0 * unbiased_𝓨.x0' .* weight_0 .+
-       unbiased_𝓨.xi * unbiased_𝓨.xi' .* weight_i
+    mul!(P, unbiased_𝓨.xi, unbiased_𝓨.xi', weight_i, false)
+    P .+= weight_0 .* unbiased_𝓨.x0 .* unbiased_𝓨.x0'
 end
