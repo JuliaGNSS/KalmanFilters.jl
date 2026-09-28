@@ -11,7 +11,7 @@ struct SRUKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
     p_apri::Matrix{T}
 end
 
-function SRUKFTUIntermediate(T::Type, num_x::Number)
+function SRUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
     xi_temp = Vector{T}(undef, num_x)
     qr_zeros = zeros(T, 3 * num_x)
     qr_A = Matrix{T}(undef, 3 * num_x, num_x)
@@ -58,7 +58,7 @@ struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
     p_posterior::Matrix{T}
 end
 
-function SRUKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
+function SRUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
     qr_zeros = zeros(T, 2 * num_x + num_y)
     qr_A = Matrix{T}(undef, 2 * num_x + num_y, num_y)
     qr_space_length = calc_gels_working_size(qr_A, qr_zeros)

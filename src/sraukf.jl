@@ -1,4 +1,4 @@
-function SRAUKFTUIntermediate(T::Type, num_x::Number)
+function SRAUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
     xi_temp = Vector{T}(undef, num_x)
     qr_zeros = zeros(T, 4 * num_x)
     qr_A = Matrix{T}(undef, 4 * num_x, num_x)
@@ -27,7 +27,7 @@ end
 
 SRAUKFTUIntermediate(num_x::Number) = SRAUKFTUIntermediate(Float64, num_x)
 
-function SRAUKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
+function SRAUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
     qr_zeros = zeros(T, 2 * num_x + 2 * num_y)
     qr_A = Matrix{T}(undef, 2 * num_x + 2 * num_y, num_y)
     qr_space_length = calc_gels_working_size(qr_A, qr_zeros)

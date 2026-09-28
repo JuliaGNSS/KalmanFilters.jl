@@ -126,7 +126,7 @@ struct SRKFTUIntermediate{T}
     puft_vcat_q::Matrix{T}
 end
 
-function SRKFTUIntermediate(T::Type, num_x::Number)
+function SRKFTUIntermediate(::Type{T}, num_x::Number) where {T}
     qr_zeros = zeros(T, 2 * num_x)
     puft_vcat_q = Matrix{T}(undef, 2 * num_x, num_x)
     qr_space_length = calc_gels_working_size(puft_vcat_q, qr_zeros)
@@ -176,7 +176,7 @@ struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     x_posterior::Vector{T}
 end
 
-function SRKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
+function SRKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
     qr_zeros = zeros(T, num_x + num_y)
     M = Matrix{T}(undef, num_x + num_y, num_x + num_y)
     qr_space_length = calc_gels_working_size(M, qr_zeros)
