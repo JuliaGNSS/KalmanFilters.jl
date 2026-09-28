@@ -123,3 +123,24 @@ end
         ) == 0
     end
 end
+
+@testset "SRUKF in-place gain with a lower innovation factor" begin
+    # The filters build the innovation factor as an upper Cholesky, so exercise the lower
+    # branch of the gain computation directly.
+    random_pos_def(n) = (A = randn(n, n); A'A + n * I)
+    num_x, num_y = 10, 4
+    P = cholesky(random_pos_def(num_x))
+    S = random_pos_def(num_y)
+    Pᵪᵧ = randn(num_x, num_y)
+    gain!(S_chol) = KalmanFilters.calc_kalman_gain_and_posterior_covariance!(
+        zeros(num_x, num_y),
+        zeros(num_x, num_x),
+        P,
+        copy(Pᵪᵧ),
+        S_chol,
+    )
+    K_upper, P_upper = gain!(cholesky(Hermitian(S, :U)))
+    K_lower, P_lower = gain!(cholesky(Hermitian(S, :L)))
+    @test K_lower ≈ K_upper
+    @test Matrix(P_lower) ≈ Matrix(P_upper)
+end
