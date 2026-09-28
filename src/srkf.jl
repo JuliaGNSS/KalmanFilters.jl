@@ -27,7 +27,7 @@ correct_cholesky_sign(R) = sign.(diag(R)) .* R
 function correct_cholesky_sign!(R)
     for i in axes(R, 1)
         if real(R[i, i]) < 0
-            R[i, :] = -R[i, :]
+            @view(R[i, :]) .*= -1
         end
     end
     return R

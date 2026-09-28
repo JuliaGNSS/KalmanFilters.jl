@@ -65,10 +65,10 @@ function time_update!(
     tu::SRUKFTUIntermediate,
     x,
     P::Union{<:AbstractMatrix,<:Cholesky},
-    f!,
+    f!::F,
     Q::Augment;
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
-)
+) where {F}
     time_update!(tu, x, Augmented(P, Q), f!, Q; weight_params = weight_params)
 end
 
@@ -77,9 +77,9 @@ function measurement_update!(
     x,
     P::Union{<:AbstractMatrix,<:Cholesky},
     y,
-    h!,
+    h!::F,
     R::Augment;
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
-)
+) where {F}
     measurement_update!(mu, x, Augmented(P, R), y, h!, R; weight_params = weight_params)
 end

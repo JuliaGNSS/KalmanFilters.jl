@@ -90,10 +90,10 @@ function time_update!(
     tu::UKFTUIntermediate,
     x,
     P,
-    f!,
+    f!::F,
     Q,
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
-)
+) where {F}
     χₖ₋₁ = calc_sigma_points!(tu.P_chol, x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform!(tu.transformed_sigma_points, tu.xi_temp, f!, χₖ₋₁)
     x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
@@ -134,10 +134,10 @@ function measurement_update!(
     x,
     P,
     y,
-    h!,
+    h!::F,
     R;
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(1e-3, 2, 0),
-)
+) where {F}
     χₖ₍ₖ₋₁₎ = calc_sigma_points!(mu.P_chol, x, P, weight_params)
     𝓨 = transform!(mu.transformed_sigma_points, mu.xi_temp, h!, χₖ₍ₖ₋₁₎)
     y_est = mean!(mu.y_est, 𝓨)
