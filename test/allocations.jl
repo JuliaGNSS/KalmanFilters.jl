@@ -85,3 +85,41 @@ end
         Augment(R_chol),
     ) == 0
 end
+
+@testset "In-place square-root sigma point updates with lower Cholesky factors" begin
+    random_pos_def(n) = (A = randn(n, n); A'A + n * I)
+    num_x, num_y = 10, 4
+    x = randn(num_x)
+    P = random_pos_def(num_x)
+    Q = random_pos_def(num_x)
+    R = random_pos_def(num_y)
+    y = randn(num_y)
+    f! = make_linear_model(randn(num_x, num_x))
+    h! = make_linear_model(randn(num_y, num_x))
+    upper(A) = cholesky(Hermitian(A, :U))
+    lower(A) = cholesky(Hermitian(A, :L))
+
+    @testset "$name" for (name, TU, MU, noise) in (
+        ("SRUKF", SRUKFTUIntermediate, SRUKFMUIntermediate, identity),
+        ("SRAUKF", SRAUKFTUIntermediate, SRAUKFMUIntermediate, Augment),
+    )
+        tu_upper = time_update!(TU(num_x), x, upper(P), f!, noise(upper(Q)))
+        tu_lower = time_update!(TU(num_x), x, lower(P), f!, noise(lower(Q)))
+        @test get_state(tu_lower) ≈ get_state(tu_upper)
+        @test get_covariance(tu_lower) ≈ get_covariance(tu_upper)
+        @test allocations_time_update!(TU(num_x), x, lower(P), f!, noise(lower(Q))) == 0
+
+        mu_upper = measurement_update!(MU(num_x, num_y), x, upper(P), y, h!, noise(upper(R)))
+        mu_lower = measurement_update!(MU(num_x, num_y), x, lower(P), y, h!, noise(lower(R)))
+        @test get_state(mu_lower) ≈ get_state(mu_upper)
+        @test get_covariance(mu_lower) ≈ get_covariance(mu_upper)
+        @test allocations_measurement_update!(
+            MU(num_x, num_y),
+            x,
+            lower(P),
+            y,
+            h!,
+            noise(lower(R)),
+        ) == 0
+    end
+end

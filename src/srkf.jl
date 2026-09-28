@@ -214,7 +214,8 @@ function measurement_update!(
     correct_cholesky_sign!(RU)
     PHᵀ = (@view(RU[1:dim_y, (dim_y+1):end]))'
     S = Cholesky(@view(RU[1:dim_y, 1:dim_y]), 'U', 0)
-    K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, S.L)
+    # `S.L` would copy the factor on Julia 1.10; the lazy adjoint of the upper one doesn't.
+    K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, UpperTriangular(S.factors)')
     x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)
     P_post = Cholesky(@view(RU[(dim_y+1):end, (dim_y+1):end]), 'U', 0)
     KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
