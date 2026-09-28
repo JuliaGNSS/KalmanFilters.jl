@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.8...v0.1.9) (2026-09-28)
+
+
+### Bug Fixes
+
+* make every filter trimmable (juliac --trim=safe) ([#31](https://github.com/JuliaGNSS/KalmanFilters.jl/issues/31)) ([7e5f1df](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/7e5f1df3a7a3048c955b497dceecf5daa88848fe))
+
 ## [0.1.8](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.7...v0.1.8) (2026-09-28)
 
 
