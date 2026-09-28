@@ -1,0 +1,41 @@
+---
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v6
+        id: semantic-release
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+          RUNNER_DEBUG: 1
+        with:
+          branches: |
+            ['+([0-9])?(.{+([0-9]),x}).x', 'master', 'main', 'next', 'next-major', {name: 'beta', prerelease: true}, {name: 'alpha', prerelease: true}]
+          extends: |
+            @ethima/semantic-release-configuration
+          extra_plugins: |
+            @ethima/semantic-release-configuration
+      - name: Notify JuliaRegistrator of new release
+        uses: peter-evans/commit-comment@v4
+        if: steps.semantic-release.outputs.new_release_published == 'true'
+        with:
+          sha: ${{ steps.semantic-release.outputs.new_release_git_head }}
+          body: |
+            @JuliaRegistrator register
+
+            Release notes:
+
+            ${{ steps.semantic-release.outputs.new_release_notes }}
