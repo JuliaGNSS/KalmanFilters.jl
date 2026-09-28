@@ -205,6 +205,9 @@ function measurement_update!(
     dim_y = length(y)
     M = mu.m
     M[1:dim_y, 1:dim_y] .= R.U
+    # The pre-array's upper-right block is zero. It has to be written on every call:
+    # the buffer starts `undef` and the QR below overwrites it with its factors.
+    M[1:dim_y, (dim_y+1):end] .= zero(eltype(M))
     M[(dim_y+1):end, 1:dim_y] .= @~ P.U * H'
     M[(dim_y+1):end, (dim_y+1):end] .= P.U
     RU = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_zeros, mu.qr_space)
