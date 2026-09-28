@@ -148,6 +148,10 @@ There is a benchmark to compare the different implementations in the benchmark f
 
 In same cases the inplace variant is slower than the allocating variant. More investigation is needed to find out why this is the case.
 
+### Benchmark CI
+
+Every pull request is benchmarked against its base branch with [AirspeedVelocity.jl](https://github.com/MilesCranmer/AirspeedVelocity.jl) and the results are posted as a PR comment. The benchmark suite lives in `benchmark/benchmarks.jl`.
+
 ## License
 
 MIT License
