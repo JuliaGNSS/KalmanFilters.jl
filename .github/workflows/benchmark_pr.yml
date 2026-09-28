@@ -1,0 +1,95 @@
+name: Benchmark this PR
+
+# Compares the PR head against the PR's *base* branch with AirspeedVelocity's `benchpkg`,
+# but reports the **minimum** time per benchmark instead of its built-in median table (the
+# minimum is far more robust to noisy-neighbour contention on shared GitHub runners, so it
+# doesn't manufacture phantom regressions when the head build lands on a busier window).
+# The table is built by `.github/scripts/bench_table.jl`.
+#
+# Security: runs as pull_request_target so the comment-posting token has write access. The
+# repo is checked out at the *base* (trusted) ref — which provides bench_table.jl — and
+# benchpkg benchmarks the PR's own benchmark/benchmarks.jl via --bench-on=<head sha>.
+# GITHUB_TOKEN is blanked for every step that builds/executes benchmark code; only the
+# comment steps see the token.
+#
+# NOTE: for pull_request_target GitHub reads this workflow from the PR's BASE branch, so a
+# rewrite only takes effect for PRs whose base already contains it — it must be merged to
+# master (and to any feature branch used as a base) to apply there.
+on:
+  pull_request_target:
+
+# Key the concurrency group on the PR number: a new push to a PR cancels that PR's own
+# in-flight run, but PRs sharing a base branch don't cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      # Base (trusted) checkout — provides .github/scripts/bench_table.jl. The PR's own
+      # code is fetched separately by benchpkg via --url, not checked out here.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: julia-actions/setup-julia@v2
+        env:
+          GITHUB_TOKEN: ""
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+        env:
+          GITHUB_TOKEN: ""
+
+      - name: Install benchpkg + JSON3
+        env:
+          GITHUB_TOKEN: ""
+        run: |
+          export JULIA_PKG_PRECOMPILE_AUTO=0
+          julia -e 'import Pkg; Pkg.add(name="AirspeedVelocity", version="0.6"); Pkg.add("JSON3")'
+          julia -e 'import Pkg; Pkg.build("AirspeedVelocity")'
+          echo "$HOME/.julia/bin" >> "$GITHUB_PATH"
+
+      - name: Run benchmarks (base vs PR head, using the PR's benchmark suite)
+        env:
+          GITHUB_TOKEN: ""
+        run: |
+          mkdir -p results
+          benchpkg KalmanFilters \
+            --url=${{ github.event.repository.clone_url }} \
+            --rev=${{ github.event.pull_request.base.sha }},${{ github.event.pull_request.head.sha }} \
+            --bench-on=${{ github.event.pull_request.head.sha }} \
+            --add=ForwardDiff,StaticArrays \
+            --output-dir=results/ \
+            --tune
+
+      - name: Build minimum-time comparison table
+        env:
+          GITHUB_TOKEN: ""
+        run: |
+          julia .github/scripts/bench_table.jl results KalmanFilters \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" > body.md
+          cat body.md
+
+      - name: Find existing benchmark comment
+        uses: peter-evans/find-comment@v4
+        id: find
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: "Benchmark Results (minimum time)"
+
+      - name: Create or update comment
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          comment-id: ${{ steps.find.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: body.md
+          edit-mode: replace

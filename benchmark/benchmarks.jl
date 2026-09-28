@@ -1,0 +1,272 @@
+# Benchmark suite for AirspeedVelocity (`benchpkg`), run on every PR by
+# `.github/workflows/benchmark_pr.yml`. AirspeedVelocity runs the PR head's copy of this
+# file against both the base and the head revision, so it must only use API that exists
+# on both.
+#
+# Run locally with:
+#   julia --project=benchmark -e 'using Pkg; Pkg.instantiate()'
+#   julia --project=benchmark -e 'include("benchmark/benchmarks.jl"); run(SUITE; verbose = true)'
+# or compare revisions with AirspeedVelocity, e.g.
+#   benchpkg KalmanFilters --path=. --rev=master,dirty --add=ForwardDiff,StaticArrays
+using BenchmarkTools
+using ForwardDiff # loads the DifferentiationInterface backend used by the EKF
+using KalmanFilters
+using LinearAlgebra
+using Random
+using StaticArrays
+
+const SUITE = BenchmarkGroup()
+
+# Keep the suite affordable on CI: every benchmark runs for both the base and head rev.
+const SECONDS = 1
+
+# (number of states, number of measurements)
+const SIZES = ((2, 2), (10, 4), (50, 16))
+
+random_pos_def(n) = (A = randn(n, n); A'A + n * I)
+
+size_label(num_states) = "$num_states states"
+size_label(num_states, num_measures) = "$num_states states, $num_measures measurements"
+
+function init_tu(num_states)
+    x = randn(num_states)
+    P = random_pos_def(num_states)
+    Q = random_pos_def(num_states)
+    F = randn(num_states, num_states)
+    f(x) = F * x
+    f!(y, x) = mul!(y, F, x)
+    # Augmented variants pass the noise sigma points as an extra argument
+    f(x, noise) = F * x .+ noise
+    f!(y, x, noise) = (mul!(y, F, x); y .+= noise)
+    return x, P, Q, F, f, f!
+end
+
+function init_mu(num_states, num_measures)
+    x = randn(num_states)
+    P = random_pos_def(num_states)
+    R = random_pos_def(num_measures)
+    y = randn(num_measures)
+    H = randn(num_measures, num_states)
+    h(x) = H * x
+    h!(y, x) = mul!(y, H, x)
+    h(x, noise) = H * x .+ noise
+    h!(y, x, noise) = (mul!(y, H, x); y .+= noise)
+    return x, P, R, y, H, h, h!
+end
+
+Random.seed!(1234)
+
+tu = SUITE["time update"] = BenchmarkGroup()
+for (num_states, _) in SIZES
+    x, P, Q, F, f, f! = init_tu(num_states)
+    P_chol = cholesky(P)
+    Q_chol = cholesky(Q)
+    label = size_label(num_states)
+
+    for name in ("KF", "SRKF", "UKF", "SRUKF", "AUKF", "SRAUKF", "EKF")
+        haskey(tu, name) || (tu[name] = BenchmarkGroup())
+        tu[name][label] = BenchmarkGroup()
+    end
+
+    tu["KF"][label]["allocating"] =
+        @benchmarkable time_update($x, $P, $F, $Q) seconds = SECONDS
+    tu["KF"][label]["inplace"] = @benchmarkable time_update!(
+        $(KFTUIntermediate(num_states)),
+        $x,
+        $P,
+        $F,
+        $Q,
+    ) seconds = SECONDS
+
+    tu["SRKF"][label]["allocating"] =
+        @benchmarkable time_update($x, $P_chol, $F, $Q_chol) seconds = SECONDS
+    tu["SRKF"][label]["inplace"] = @benchmarkable time_update!(
+        $(SRKFTUIntermediate(num_states)),
+        $x,
+        $P_chol,
+        $F,
+        $Q_chol,
+    ) seconds = SECONDS
+
+    tu["UKF"][label]["allocating"] =
+        @benchmarkable time_update($x, $P, $f, $Q) seconds = SECONDS
+    tu["UKF"][label]["inplace"] = @benchmarkable time_update!(
+        $(UKFTUIntermediate(num_states)),
+        $x,
+        $P,
+        $f!,
+        $Q,
+    ) seconds = SECONDS
+
+    tu["SRUKF"][label]["allocating"] =
+        @benchmarkable time_update($x, $P_chol, $f, $Q_chol) seconds = SECONDS
+    tu["SRUKF"][label]["inplace"] = @benchmarkable time_update!(
+        $(SRUKFTUIntermediate(num_states)),
+        $x,
+        $P_chol,
+        $f!,
+        $Q_chol,
+    ) seconds = SECONDS
+
+    tu["AUKF"][label]["allocating"] =
+        @benchmarkable time_update($x, $P, $f, $(Augment(Q))) seconds = SECONDS
+    tu["AUKF"][label]["inplace"] = @benchmarkable time_update!(
+        $(AUKFTUIntermediate(num_states)),
+        $x,
+        $P,
+        $f!,
+        $(Augment(Q)),
+    ) seconds = SECONDS
+
+    tu["SRAUKF"][label]["allocating"] =
+        @benchmarkable time_update($x, $P_chol, $f, $(Augment(Q_chol))) seconds = SECONDS
+    tu["SRAUKF"][label]["inplace"] = @benchmarkable time_update!(
+        $(SRAUKFTUIntermediate(num_states)),
+        $x,
+        $P_chol,
+        $f!,
+        $(Augment(Q_chol)),
+    ) seconds = SECONDS
+
+    tu["EKF"][label]["allocating"] = @benchmarkable time_update(
+        $x,
+        $P,
+        $(JacobianPreparation(f, zero(x))),
+        $Q,
+    ) seconds = SECONDS
+end
+
+mu = SUITE["measurement update"] = BenchmarkGroup()
+for (num_states, num_measures) in SIZES
+    x, P, R, y, H, h, h! = init_mu(num_states, num_measures)
+    P_chol = cholesky(P)
+    R_chol = cholesky(R)
+    label = size_label(num_states, num_measures)
+
+    for name in ("KF", "SRKF", "UKF", "SRUKF", "AUKF", "SRAUKF", "EKF")
+        haskey(mu, name) || (mu[name] = BenchmarkGroup())
+        mu[name][label] = BenchmarkGroup()
+    end
+
+    mu["KF"][label]["allocating"] =
+        @benchmarkable measurement_update($x, $P, $y, $H, $R) seconds = SECONDS
+    mu["KF"][label]["inplace"] = @benchmarkable measurement_update!(
+        $(KFMUIntermediate(num_states, num_measures)),
+        $x,
+        $P,
+        $y,
+        $H,
+        $R,
+    ) seconds = SECONDS
+
+    mu["SRKF"][label]["allocating"] =
+        @benchmarkable measurement_update($x, $P_chol, $y, $H, $R_chol) seconds = SECONDS
+    mu["SRKF"][label]["inplace"] = @benchmarkable measurement_update!(
+        $(SRKFMUIntermediate(num_states, num_measures)),
+        $x,
+        $P_chol,
+        $y,
+        $H,
+        $R_chol,
+    ) seconds = SECONDS
+
+    mu["UKF"][label]["allocating"] =
+        @benchmarkable measurement_update($x, $P, $y, $h, $R) seconds = SECONDS
+    mu["UKF"][label]["inplace"] = @benchmarkable measurement_update!(
+        $(UKFMUIntermediate(num_states, num_measures)),
+        $x,
+        $P,
+        $y,
+        $h!,
+        $R,
+    ) seconds = SECONDS
+
+    mu["SRUKF"][label]["allocating"] =
+        @benchmarkable measurement_update($x, $P_chol, $y, $h, $R_chol) seconds = SECONDS
+    mu["SRUKF"][label]["inplace"] = @benchmarkable measurement_update!(
+        $(SRUKFMUIntermediate(num_states, num_measures)),
+        $x,
+        $P_chol,
+        $y,
+        $h!,
+        $R_chol,
+    ) seconds = SECONDS
+
+    mu["AUKF"][label]["allocating"] =
+        @benchmarkable measurement_update($x, $P, $y, $h, $(Augment(R))) seconds = SECONDS
+    mu["AUKF"][label]["inplace"] = @benchmarkable measurement_update!(
+        $(AUKFMUIntermediate(num_states, num_measures)),
+        $x,
+        $P,
+        $y,
+        $h!,
+        $(Augment(R)),
+    ) seconds = SECONDS
+
+    mu["SRAUKF"][label]["allocating"] = @benchmarkable measurement_update(
+        $x,
+        $P_chol,
+        $y,
+        $h,
+        $(Augment(R_chol)),
+    ) seconds = SECONDS
+    mu["SRAUKF"][label]["inplace"] = @benchmarkable measurement_update!(
+        $(SRAUKFMUIntermediate(num_states, num_measures)),
+        $x,
+        $P_chol,
+        $y,
+        $h!,
+        $(Augment(R_chol)),
+    ) seconds = SECONDS
+
+    mu["EKF"][label]["allocating"] = @benchmarkable measurement_update(
+        $x,
+        $P,
+        $y,
+        $(JacobianPreparation(h, zero(x))),
+        $R,
+    ) seconds = SECONDS
+end
+
+# A full filter loop (time update followed by measurement update) with StaticArrays, see
+# also `static_arrays_benchmark.jl`.
+function run_static_srkf(x, P_chol, F, Q_chol, y, H, R_chol, num_iterations)
+    for _ = 1:num_iterations
+        tu = time_update(x, P_chol, F, Q_chol)
+        mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), y, H, R_chol)
+        x, P_chol = get_state(mu), get_sqrt_covariance(mu)
+    end
+    return x, P_chol
+end
+
+function run_static_kf(x, P, F, Q, y, H, R, num_iterations)
+    for _ = 1:num_iterations
+        tu = time_update(x, P, F, Q)
+        mu = measurement_update(get_state(tu), get_covariance(tu), y, H, R)
+        x, P = get_state(mu), get_covariance(mu)
+    end
+    return x, P
+end
+
+static = SUITE["StaticArrays"] = BenchmarkGroup()
+let Dx = 2, Dy = 2
+    F = @SMatrix randn(Dx, Dx)
+    Q = SMatrix{Dx,Dx}(random_pos_def(Dx))
+    H = @SMatrix randn(Dy, Dx)
+    R = SMatrix{Dy,Dy}(random_pos_def(Dy))
+    x = @SVector randn(Dx)
+    P = SMatrix{Dx,Dx}(random_pos_def(Dx))
+    y = @SVector randn(Dy)
+    static["KF 100 iterations"] =
+        @benchmarkable run_static_kf($x, $P, $F, $Q, $y, $H, $R, 100) seconds = SECONDS
+    static["SRKF 100 iterations"] = @benchmarkable run_static_srkf(
+        $x,
+        $(cholesky(P)),
+        $F,
+        $(cholesky(Q)),
+        $y,
+        $H,
+        $(cholesky(R)),
+        100,
+    ) seconds = SECONDS
+end

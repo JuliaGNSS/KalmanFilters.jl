@@ -68,6 +68,13 @@
                 @inferred measurement_update!(mu_interm, x, P_chol, y, H, R_chol)
             @test @inferred(get_covariance(mu_chol_inplace)) ≈ get_covariance(mu)
             @test @inferred(get_state(mu_chol_inplace)) ≈ get_state(mu)
+
+            # A reused buffer holds the previous call's QR factors, and a fresh one
+            # whatever memory it was handed; neither may leak into the update.
+            fill!(mu_interm.m, 7)
+            mu_chol_reused = measurement_update!(mu_interm, x, P_chol, y, H, R_chol)
+            @test get_covariance(mu_chol_reused) ≈ get_covariance(mu)
+            @test get_state(mu_chol_reused) ≈ get_state(mu)
         end
     end
 
