@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.9...v0.1.10) (2026-09-28)
+
+
+### Performance Improvements
+
+* make in-place UKF/AUKF updates faster than allocating versions ([#33](https://github.com/JuliaGNSS/KalmanFilters.jl/issues/33)) ([feac29e](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/feac29eea1123612806b809f925e74861a87a47d))
+
 ## [0.1.9](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.8...v0.1.9) (2026-09-28)
 
 
