@@ -257,7 +257,8 @@ function substract_mean(𝓨::TransformedSigmaPoints, y)
 end
 
 function substract_mean!(unbiased_𝓨::TransformedSigmaPoints, 𝓨::TransformedSigmaPoints, y)
-    unbiased_𝓨 .= 𝓨 .- y
+    unbiased_𝓨.x0 .= 𝓨.x0 .- y
+    unbiased_𝓨.xi .= 𝓨.xi .- y
     TransformedSigmaPoints(unbiased_𝓨.x0, unbiased_𝓨.xi, 𝓨.weight_params)
 end
 
@@ -272,8 +273,11 @@ end
 
 function cov!(P, unbiased_𝓨::TransformedSigmaPoints, Q::AbstractMatrix)
     weight_0, weight_i = calc_cov_weights(unbiased_𝓨)
-    P .= @~ unbiased_𝓨.x0 * unbiased_𝓨.x0' .* weight_0 .+
-       unbiased_𝓨.xi * unbiased_𝓨.xi' .* weight_i .+ Q
+    # Explicit mul! so that BLAS is used; a fused lazy broadcast falls back to a
+    # generic (and much slower) matrix product.
+    copyto!(P, Q)
+    mul!(P, unbiased_𝓨.xi, unbiased_𝓨.xi', weight_i, true)
+    P .+= weight_0 .* unbiased_𝓨.x0 .* unbiased_𝓨.x0'
 end
 
 function cov(χ::SigmaPoints, unbiased_𝓨::TransformedSigmaPoints)
@@ -288,9 +292,13 @@ end
 function cov!(P, χ::SigmaPoints, unbiased_𝓨::TransformedSigmaPoints)
     weight_0, weight_i = calc_cov_weights(χ)
     num_states = length(χ.x0)
-    P .= @~ χ.P_chol * (@view(unbiased_𝓨.xi[:, 1:num_states]))'
-    P .-= @~ χ.P_chol * (@view(unbiased_𝓨.xi[:, (num_states+1):(2*num_states)]))'
-    P .*= weight_i
+    # P_chol * (A - B)' * weight_i with a single triangular multiply
+    P .=
+        weight_i .* (
+            (@view(unbiased_𝓨.xi[:, 1:num_states]))' .-
+            (@view(unbiased_𝓨.xi[:, (num_states+1):(2*num_states)]))'
+        )
+    lmul!(χ.P_chol, P)
 end
 
 function mean_and_cov(𝓨::TransformedSigmaPoints, Q)
