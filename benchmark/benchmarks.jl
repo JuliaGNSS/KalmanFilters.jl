@@ -17,8 +17,11 @@ using StaticArrays
 
 const SUITE = BenchmarkGroup()
 
-# Keep the suite affordable on CI: every benchmark runs for both the base and head rev.
-const SECONDS = 1
+# Keep the suite affordable on CI: every benchmark is tuned and run for both the base and
+# head rev. The PR comment reports the minimum time, which settles within far fewer samples
+# than the default 5 s budget collects; 0.25 s is as stable as 1 s run to run, and still
+# gives the slowest benchmarks (~0.3 ms) hundreds of samples.
+const SECONDS = 0.25
 
 # (number of states, number of measurements)
 const SIZES = ((2, 2), (10, 4), (50, 16))
