@@ -60,7 +60,7 @@ struct KFTUIntermediate{T}
     fp::Matrix{T}
 end
 
-KFTUIntermediate(T::Type, num_x::Number) = KFTUIntermediate(
+KFTUIntermediate(::Type{T}, num_x::Number) where {T} = KFTUIntermediate(
     Vector{T}(undef, num_x),
     Matrix{T}(undef, num_x, num_x),
     Matrix{T}(undef, num_x, num_x),
@@ -78,7 +78,7 @@ struct KFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     p_posterior::Matrix{T}
 end
 
-function KFMUIntermediate(T::Type, num_x::Number, num_y::Number)
+function KFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
     return KFMUIntermediate(
         Vector{T}(undef, num_y),
         Matrix{T}(undef, num_y, num_y),

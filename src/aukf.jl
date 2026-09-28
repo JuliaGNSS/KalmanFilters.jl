@@ -1,4 +1,4 @@
-function AUKFTUIntermediate(T::Type, num_x::Number)
+function AUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
     xi_temp = Vector{T}(undef, num_x)
     UKFTUIntermediate(
         Augmented(Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x)),
@@ -20,7 +20,7 @@ end
 
 AUKFTUIntermediate(num_x::Number) = AUKFTUIntermediate(Float64, num_x)
 
-function AUKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
+function AUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
     UKFMUIntermediate(
         Augmented(Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_y, num_y)),
         Augmented(Vector{T}(undef, num_x), Vector{T}(undef, num_y)),

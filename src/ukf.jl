@@ -7,7 +7,7 @@ struct UKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix{T
     p_apri::Matrix{T}
 end
 
-UKFTUIntermediate(T::Type, num_x::Number) = UKFTUIntermediate(
+UKFTUIntermediate(::Type{T}, num_x::Number) where {T} = UKFTUIntermediate(
     Matrix{T}(undef, num_x, num_x),
     Vector{T}(undef, num_x),
     TransformedSigmaPoints(
@@ -41,7 +41,7 @@ struct UKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix{T
     p_posterior::Matrix{T}
 end
 
-function UKFMUIntermediate(T::Type, num_x::Number, num_y::Number)
+function UKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
     UKFMUIntermediate(
         Matrix{T}(undef, num_x, num_x),
         Vector{T}(undef, num_x),
