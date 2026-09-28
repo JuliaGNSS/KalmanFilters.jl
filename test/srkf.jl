@@ -6,17 +6,30 @@
         Q, R = qr(A)
         @test R_test ≈ R ≈ KalmanFilters.calc_upper_triangular_of_qr(A)
 
-        qr_zeros = zeros(10)
-        qr_space_length = @inferred KalmanFilters.calc_gels_working_size(A, qr_zeros)
+        qr_tau = zeros(5)
+        qr_space_length = @inferred KalmanFilters.calc_geqrf_working_size(A)
         qr_space = zeros(qr_space_length)
         R_res = zeros(5, 5)
         R_test_inplace = @inferred KalmanFilters.calc_upper_triangular_of_qr_inplace!(
             R_res,
             copy(A),
-            qr_zeros,
+            qr_tau,
             qr_space,
         )
         @test R_test_inplace ≈ R
+        @test istriu(R_test_inplace)
+
+        @testset "with $T" for T in (Float32, ComplexF64, ComplexF32)
+            A_T = randn(T, 10, 5)
+            R_T = zeros(T, 5, 5)
+            KalmanFilters.calc_upper_triangular_of_qr_inplace!(
+                R_T,
+                copy(A_T),
+                zeros(T, 5),
+                zeros(T, KalmanFilters.calc_geqrf_working_size(A_T)),
+            )
+            @test R_T ≈ qr(A_T).R
+        end
     end
 
     @testset "Time update with $T type $t" for T in (Float64, ComplexF64),

@@ -1,8 +1,8 @@
 function SRAUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
     xi_temp = Vector{T}(undef, num_x)
-    qr_zeros = zeros(T, 4 * num_x)
+    qr_tau = zeros(T, num_x)
     qr_A = Matrix{T}(undef, 4 * num_x, num_x)
-    qr_space_length = calc_gels_working_size(qr_A, qr_zeros)
+    qr_space_length = calc_geqrf_working_size(qr_A)
     SRUKFTUIntermediate(
         Augmented(Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x)),
         Augmented(xi_temp, xi_temp),
@@ -17,7 +17,7 @@ function SRAUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
             Matrix{T}(undef, num_x, 4 * num_x),
             MeanSetWeightingParameters(0.0),
         ),
-        qr_zeros,
+        qr_tau,
         Vector{T}(undef, qr_space_length),
         qr_A,
         Vector{T}(undef, num_x),
@@ -28,9 +28,9 @@ end
 SRAUKFTUIntermediate(num_x::Number) = SRAUKFTUIntermediate(Float64, num_x)
 
 function SRAUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
-    qr_zeros = zeros(T, 2 * num_x + 2 * num_y)
+    qr_tau = zeros(T, num_y)
     qr_A = Matrix{T}(undef, 2 * num_x + 2 * num_y, num_y)
-    qr_space_length = calc_gels_working_size(qr_A, qr_zeros)
+    qr_space_length = calc_geqrf_working_size(qr_A)
     SRUKFMUIntermediate(
         Augmented(Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_y, num_y)),
         Augmented(Vector{T}(undef, num_x), Vector{T}(undef, num_y)),
@@ -47,7 +47,7 @@ function SRAUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
             MeanSetWeightingParameters(0.0),
         ),
         Vector{T}(undef, num_y),
-        qr_zeros,
+        qr_tau,
         Vector{T}(undef, qr_space_length),
         qr_A,
         Matrix{T}(undef, num_y, num_y),

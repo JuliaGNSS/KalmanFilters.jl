@@ -4,7 +4,7 @@ struct SRUKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
     transformed_x0_temp::Vector{T}
     transformed_sigma_points::TS
     unbiased_sigma_points::TS
-    qr_zeros::Vector{T}
+    qr_tau::Vector{T}
     qr_space::Vector{T}
     qr_A::Matrix{T}
     x_apri::Vector{T}
@@ -13,9 +13,9 @@ end
 
 function SRUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
     xi_temp = Vector{T}(undef, num_x)
-    qr_zeros = zeros(T, 3 * num_x)
+    qr_tau = zeros(T, num_x)
     qr_A = Matrix{T}(undef, 3 * num_x, num_x)
-    qr_space_length = calc_gels_working_size(qr_A, qr_zeros)
+    qr_space_length = calc_geqrf_working_size(qr_A)
     SRUKFTUIntermediate(
         Matrix{T}(undef, num_x, num_x),
         xi_temp,
@@ -30,7 +30,7 @@ function SRUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
             Matrix{T}(undef, num_x, 2 * num_x),
             MeanSetWeightingParameters(0.0),
         ),
-        qr_zeros,
+        qr_tau,
         Vector{T}(undef, qr_space_length),
         qr_A,
         Vector{T}(undef, num_x),
@@ -48,7 +48,7 @@ struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
     transformed_sigma_points::TS
     unbiased_sigma_points::TS
     ỹ::Vector{T}
-    qr_zeros::Vector{T}
+    qr_tau::Vector{T}
     qr_space::Vector{T}
     qr_A::Matrix{T}
     innovation_covariance::Matrix{T}
@@ -59,9 +59,9 @@ struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
 end
 
 function SRUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
-    qr_zeros = zeros(T, 2 * num_x + num_y)
+    qr_tau = zeros(T, num_y)
     qr_A = Matrix{T}(undef, 2 * num_x + num_y, num_y)
-    qr_space_length = calc_gels_working_size(qr_A, qr_zeros)
+    qr_space_length = calc_geqrf_working_size(qr_A)
     SRUKFMUIntermediate(
         Matrix{T}(undef, num_x, num_x),
         Vector{T}(undef, num_x),
@@ -78,7 +78,7 @@ function SRUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
             MeanSetWeightingParameters(0.0),
         ),
         Vector{T}(undef, num_y),
-        qr_zeros,
+        qr_tau,
         Vector{T}(undef, qr_space_length),
         qr_A,
         Matrix{T}(undef, num_y, num_y),
@@ -109,7 +109,7 @@ end
 function cov!(
     res,
     qr_A,
-    qr_zeros,
+    qr_tau,
     qr_space,
     x0_temp,
     χ::TransformedSigmaPoints,
@@ -124,7 +124,7 @@ function cov!(
     else
         qr_A[(size(χ.xi, 2)+1):end, :] = LowerTriangular(noise.factors)'
     end
-    R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_zeros, qr_space)
+    R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_tau, qr_space)
     correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     x0_temp .= sqrt(abs(weight_0)) .* χ.x0
@@ -153,7 +153,7 @@ end
 function cov!(
     res,
     qr_A,
-    qr_zeros,
+    qr_tau,
     qr_space,
     x0_temp,
     χ::TransformedSigmaPoints,
@@ -161,7 +161,7 @@ function cov!(
 )
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     qr_A .= sqrt(weight_i) .* χ.xi'
-    R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_zeros, qr_space)
+    R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_tau, qr_space)
     correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     x0_temp .= sqrt(abs(weight_0)) .* χ.x0
@@ -171,6 +171,55 @@ function cov!(
         lowrankupdate!(S, x0_temp)
     end
     S
+end
+
+"""
+    lowrankdowndate_columns!(C::Cholesky, V::AbstractMatrix) -> C
+
+Downdates the Cholesky factorization `C` of `A` to the factorization of `A - V * V'`
+by applying `LinearAlgebra.lowrankdowndate!` for each column of `V`. It uses the same
+Givens rotations, but without bounds checks and with a multiplication instead of a
+division in the inner loop, which makes it about twice as fast. Like
+`lowrankdowndate!`, it overwrites `V`.
+"""
+function lowrankdowndate_columns!(C::Cholesky, V::AbstractMatrix)
+    A = C.factors
+    n = size(A, 1)
+    if size(V, 1) != n
+        throw(DimensionMismatch("updating vectors must fit size of factorization"))
+    end
+    is_upper = C.uplo === 'U'
+    for l in axes(V, 2)
+        v = view(V, :, l)
+        is_upper && conj!(v)
+        @inbounds for i = 1:n
+            Aii = A[i, i]
+            # Compute Givens rotation
+            s = conj(v[i] / Aii)
+            s2 = abs2(s)
+            s2 > 1 && throw(PosDefException(i))
+            c = sqrt(1 - s2)
+            inv_c = inv(c)
+            A[i, i] = c * Aii
+            # Update remaining elements in row/column
+            if is_upper
+                for j = (i+1):n
+                    vj = v[j]
+                    Aij = (A[i, j] - s * vj) * inv_c
+                    A[i, j] = Aij
+                    v[j] = -s' * Aij + c * vj
+                end
+            else
+                for j = (i+1):n
+                    vj = v[j]
+                    Aji = (A[j, i] - s * vj) * inv_c
+                    A[j, i] = Aji
+                    v[j] = -s' * Aji + c * vj
+                end
+            end
+        end
+    end
+    C
 end
 
 function calc_kalman_gain_and_posterior_covariance(
@@ -183,11 +232,8 @@ function calc_kalman_gain_and_posterior_covariance(
     K = S.uplo === 'U' ? U / S.U' : U / S.L
     # StaticArrays doesn't support lowrankdowndate
     # see https://github.com/JuliaArrays/StaticArrays.jl/issues/930
-    P_post = reduce(
-        lowrankdowndate,
-        eachcol(U);
-        init = Cholesky(Matrix(P.factors), P.uplo, P.info),
-    )
+    P_post =
+        lowrankdowndate_columns!(Cholesky(Matrix(P.factors), P.uplo, P.info), Matrix(U))
     K, P_post
 end
 
@@ -210,7 +256,7 @@ function calc_kalman_gain_and_posterior_covariance!(
     end
     P_post .= P.factors
     P_chol = Cholesky(P_post, P.uplo, P.info)
-    foreach(u -> lowrankdowndate!(P_chol, u), eachcol(U))
+    lowrankdowndate_columns!(P_chol, U)
     K, P_chol
 end
 
@@ -248,7 +294,7 @@ function time_update!(
     P_apri = cov!(
         tu.p_apri,
         tu.qr_A,
-        tu.qr_zeros,
+        tu.qr_tau,
         tu.qr_space,
         tu.transformed_x0_temp,
         unbiased_χₖ₍ₖ₋₁₎,
@@ -273,7 +319,7 @@ function measurement_update!(
     S = cov!(
         mu.innovation_covariance,
         mu.qr_A,
-        mu.qr_zeros,
+        mu.qr_tau,
         mu.qr_space,
         mu.transformed_x0_temp,
         unbiased_𝓨,

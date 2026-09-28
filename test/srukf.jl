@@ -1,4 +1,22 @@
 @testset "Square root Unscented Kalman filter" begin
+    @testset "Rank-k Cholesky downdate with $T, uplo $uplo" for T in (Float64, ComplexF64),
+        uplo in (:U, :L)
+
+        A = randn(T, 6, 6)
+        P = Hermitian(A' * A + 6I)
+        V = 0.3 .* randn(T, 6, 3)
+        P_chol = cholesky(P)
+        C = uplo === :U ? Cholesky(copy(P_chol.U), 'U', 0) : Cholesky(copy(P_chol.L), 'L', 0)
+        expected = foldl(lowrankdowndate!, eachcol(copy(V)); init = copy(C))
+        result = KalmanFilters.lowrankdowndate_columns!(copy(C), copy(V))
+        @test result.factors ≈ expected.factors
+        @test Matrix(result) ≈ P - V * V'
+        # P - v * v' has the diagonal entry -P[1, 1] and can't be positive definite
+        V_bad = zeros(T, 6, 1)
+        V_bad[1] = sqrt(2 * real(P[1, 1]))
+        @test_throws PosDefException KalmanFilters.lowrankdowndate_columns!(copy(C), V_bad)
+    end
+
     @testset "Covariance" begin
         weight_params = ScaledSetWeightingParameters(0.5, 2, 1)
         x = randn(5)
