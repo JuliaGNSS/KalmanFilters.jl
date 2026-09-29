@@ -1,5 +1,13 @@
 # Changelog
 
+# [1.0.0](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.11...v1.0.0) (2026-09-29)
+
+
+### Performance Improvements
+
+* speed up the square root unscented Kalman filters ([682a2e8](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/682a2e8303013e78e31dcba8e7f6954a0843f389))
+* use the faster QR decompositions in the square root Kalman filter ([af08bd2](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/af08bd28475a15ce466ef48a4b1148d8dd6f3858))
+
 ## [0.1.11](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.10...v0.1.11) (2026-09-29)
 
 
