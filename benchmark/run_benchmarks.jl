@@ -1,4 +1,14 @@
-using BenchmarkTools, LinearAlgebra, KalmanFilters, Plots, Colors
+# Benchmarks all filters and generates the plots of the README. Run it with an
+# environment that provides KalmanFilters, BenchmarkTools, ForwardDiff and CairoMakie,
+# e.g.
+#   julia --project=<env> benchmark/run_benchmarks.jl
+using BenchmarkTools, LinearAlgebra, KalmanFilters, CairoMakie
+using ForwardDiff # loads the DifferentiationInterface backend used by the EKF
+
+# The plots show the minimum time, which settles within far fewer samples than the
+# default 5 s budget per benchmark collects (see also `benchmarks.jl`). With the default,
+# the several hundred benchmarks take about an hour.
+BenchmarkTools.DEFAULT_PARAMETERS.seconds = 0.25
 
 function init_mu(num_states, num_measures)
     x = randn(num_states)
@@ -39,7 +49,7 @@ function run_measurement_update_benchmarks(
     allocation = false,
 )
     num_measurements = length(num_measurement_tests)
-    kf_types = (:kf, :srkf, :ukf, :srukf, :aukf, :sraukf)
+    kf_types = (:kf, :srkf, :ekf, :ukf, :srukf, :aukf, :sraukf)
     buffers = [
         (
             inplace = zeros(length(num_state_tests), num_measurements),
@@ -75,6 +85,15 @@ function run_measurement_update_benchmarks(
             else
                 @belapsed measurement_update!($srkf_inter, $x, $P_chol, $y, $H, $R_chol)
             end
+
+            ekf_h = JacobianPreparation(h, zero(x))
+            results.ekf.allocating[i, j] = if allocation
+                @allocated measurement_update(x, P, y, ekf_h, R)
+            else
+                @belapsed measurement_update($x, $P, $y, $ekf_h, $R)
+            end
+            # There is no in-place EKF measurement update
+            results.ekf.inplace[i, j] = NaN
 
             results.ukf.allocating[i, j] = if allocation
                 @allocated measurement_update(x, P, y, h, R)
@@ -136,7 +155,7 @@ function run_measurement_update_benchmarks(
 end
 
 function run_time_update_benchmarks(num_state_tests; allocation = false)
-    kf_types = (:kf, :srkf, :ukf, :srukf, :aukf, :sraukf)
+    kf_types = (:kf, :srkf, :ekf, :ukf, :srukf, :aukf, :sraukf)
     buffers = [
         (
             inplace = zeros(length(num_state_tests)),
@@ -171,6 +190,15 @@ function run_time_update_benchmarks(num_state_tests; allocation = false)
         else
             @belapsed time_update!($srkf_inter, $x, $P_chol, $F, $Q_chol)
         end
+
+        ekf_f = JacobianPreparation(f, zero(x))
+        results.ekf.allocating[i] = if allocation
+            @allocated time_update(x, P, ekf_f, Q)
+        else
+            @belapsed time_update($x, $P, $ekf_f, $Q)
+        end
+        # There is no in-place EKF time update
+        results.ekf.inplace[i] = NaN
 
         results.ukf.allocating[i] = if allocation
             @allocated time_update(x, P, f, Q)
@@ -223,154 +251,149 @@ function run_time_update_benchmarks(num_state_tests; allocation = false)
     results
 end
 
+# Each filter and its square root variant share a color and are distinguished by the
+# marker (circles for the standard, triangles for the square root variant), the
+# allocating and in-place updates by the line style.
+# The EKF has neither a square root variant nor an in-place update (its in-place results
+# are NaN, which isn't drawn).
+const FILTER_FAMILIES = (
+    (name = "KF", standard = :kf, square_root = :srkf),
+    (name = "EKF", standard = :ekf, square_root = nothing),
+    (name = "UKF", standard = :ukf, square_root = :srukf),
+    (name = "AUKF", standard = :aukf, square_root = :sraukf),
+)
+const FAMILY_COLORS = Makie.wong_colors()[1:4]
+const VARIANT_MARKERS = (standard = (:circle, 7), square_root = (:utriangle, 11))
+const UPDATE_LINESTYLES = (allocating = :solid, inplace = :dash)
+
+# The README is at most about 830 pixels wide on GitHub. The figures are laid out for
+# that width and saved with twice the resolution, so that they stay sharp.
+const FIGURE_WIDTH = 800
+const PX_PER_UNIT = 2
+
+function plot_series!(ax, num_state_tests, results, column; scale)
+    for (family, color) in zip(FILTER_FAMILIES, FAMILY_COLORS),
+        (update, linestyle) in pairs(UPDATE_LINESTYLES),
+        (variant, (marker, markersize)) in pairs(VARIANT_MARKERS)
+
+        filter_type = getproperty(family, variant)
+        isnothing(filter_type) && continue
+        values = getproperty(results[filter_type], update)[:, column] ./ scale
+        scatterlines!(
+            ax,
+            num_state_tests,
+            values;
+            color,
+            linestyle,
+            linewidth = 2,
+            marker,
+            markersize,
+        )
+    end
+end
+
+# Ticks at 1, 2 and 5 times the powers of ten, or only at the powers of ten if the
+# values span several of them, labeled as plain numbers instead of as `10^x`.
+function log_ticks(values)
+    finite_values = filter(v -> isfinite(v) && v > 0, values)
+    low, high =
+        floor(Int, log10(minimum(finite_values))), ceil(Int, log10(maximum(finite_values)))
+    mantissas = high - low > 3 ? (1,) : (1, 2, 5)
+    ticks = [m * 10.0^e for e = low:high for m in mantissas]
+    ticks, map(tick -> string(tick >= 1 ? round(Int, tick) : tick), ticks)
+end
+
+function add_legend!(position)
+    gray = RGBf(0.35, 0.35, 0.35)
+    Legend(
+        position,
+        [
+            [LineElement(; color, linewidth = 3) for color in FAMILY_COLORS],
+            [
+                MarkerElement(; color = gray, marker, markersize) for
+                (marker, markersize) in values(VARIANT_MARKERS)
+            ],
+            [
+                LineElement(; color = gray, linestyle, linewidth = 2) for
+                linestyle in values(UPDATE_LINESTYLES)
+            ],
+        ],
+        [
+            [family.name for family in FILTER_FAMILIES],
+            ["Standard", "Square root"],
+            ["Allocating", "In-place"],
+        ],
+        ["Filter", "Variant", "Update"];
+        orientation = :horizontal,
+        titleposition = :top,
+        framevisible = false,
+        tellheight = true,
+        tellwidth = false,
+    )
+end
+
+panel_values(results, column) = reduce(
+    vcat,
+    [
+        getproperty(r, update)[:, column] for r in results for
+        update in keys(UPDATE_LINESTYLES)
+    ],
+)
+
 function plot_benchmarks(
     results,
     num_state_tests;
-    num_measurement_tests = 1:1,
+    num_measurement_tests = nothing,
+    title = "Time update",
     ylabel = "Time (μs)",
     scale = 10^-6,
     logscale = false,
 )
-    colors = distinguishable_colors(
-        length(results),
-        [RGB(1, 1, 1), RGB(0, 0, 0)];
-        dropseed = true,
-    )
-    num_rows = ceil(Int, length(num_measurement_tests) / 2)
-    p = plot(
-        num_state_tests,
-        results.kf.allocating / scale;
-        layout = length(num_measurement_tests) > 1 ? (num_rows, 2) : 1,
-        seriescolor = colors[1],
-        legend = false,
-        title = length(num_measurement_tests) > 1 ?
-                permutedims(map(x -> "$x measurements", num_measurement_tests)) :
-                "Time update",
-        xlabel = "# States",
-        ylabel = ylabel,
-        yscale = logscale ? :log10 : :identity,
-    )
-    plot!(
-        num_state_tests,
-        results.kf.inplace / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[1],
-        linestyle = :dash,
-    )
-
-    plot!(
-        num_state_tests,
-        results.srkf.allocating / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[2],
-    )
-    plot!(
-        num_state_tests,
-        results.srkf.inplace / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[2],
-        linestyle = :dash,
-    )
-
-    plot!(
-        num_state_tests,
-        results.ukf.allocating / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[3],
-    )
-    plot!(
-        num_state_tests,
-        results.ukf.inplace / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[3],
-        linestyle = :dash,
-    )
-
-    plot!(
-        num_state_tests,
-        results.srukf.allocating / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[4],
-    )
-    plot!(
-        num_state_tests,
-        results.srukf.inplace / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[4],
-        linestyle = :dash,
-    )
-
-    plot!(
-        num_state_tests,
-        results.aukf.allocating / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[5],
-    )
-    plot!(
-        num_state_tests,
-        results.aukf.inplace / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[5],
-        linestyle = :dash,
-    )
-
-    plot!(
-        num_state_tests,
-        results.sraukf.allocating / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[6],
-        label = "SRAUKF",
-    )
-    plot!(
-        num_state_tests,
-        results.sraukf.inplace / scale;
-        layout = length(num_measurement_tests),
-        seriescolor = colors[6],
-        linestyle = :dash,
-        label = "SRAUKF inplace",
-    )
-
-    # Hack for single legend
-    legend_plot = plot([1]; framestyle = :none, seriescolor = colors[1], label = "KF")
-    plot!([1]; seriescolor = colors[1], linestyle = :dash, label = "KF inplace")
-
-    plot!([1]; seriescolor = colors[2], label = "SRKF")
-    plot!([1]; seriescolor = colors[2], linestyle = :dash, label = "SRKF inplace")
-
-    plot!([1]; seriescolor = colors[3], label = "UKF")
-    plot!([1]; seriescolor = colors[3], linestyle = :dash, label = "UKF inplace")
-
-    plot!([1]; seriescolor = colors[4], label = "SRUKF")
-    plot!([1]; seriescolor = colors[4], linestyle = :dash, label = "SRUKF inplace")
-
-    plot!([1]; seriescolor = colors[5], label = "AUKF")
-    plot!([1]; seriescolor = colors[5], linestyle = :dash, label = "AUKF inplace")
-
-    plot!([1]; seriescolor = colors[6], label = "SRAUKF")
-    plot!([1]; seriescolor = colors[6], linestyle = :dash, label = "SRAUKF inplace")
-    plot(
-        p,
-        legend_plot;
-        layout = grid(2, 1; heights = [num_rows, 1.2] / (num_rows + 1.2)),
-        size = (800, num_rows * 440),
-    )
+    columns = isnothing(num_measurement_tests) ? (1:1) : eachindex(num_measurement_tests)
+    num_cols = length(columns) > 1 ? 2 : 1
+    num_rows = cld(length(columns), num_cols)
+    panel_height = num_cols > 1 ? 260 : 340
+    fig = Figure(; size = (FIGURE_WIDTH, num_rows * panel_height + 110), fontsize = 14)
+    axes = map(enumerate(columns)) do (i, column)
+        row, col = fldmod1(i, num_cols)
+        Axis(
+            fig[row, col];
+            title = isnothing(num_measurement_tests) ? title :
+                    "$(num_measurement_tests[column]) measurements",
+            xlabel = row == num_rows ? "Number of states" : "",
+            ylabel = col == 1 ? ylabel : "",
+            yscale = logscale ? log10 : identity,
+            yticks = logscale ? log_ticks(panel_values(results, column) ./ scale) :
+                     Makie.automatic,
+            xticks = 0:10:maximum(num_state_tests),
+        )
+    end
+    for (ax, column) in zip(axes, columns)
+        plot_series!(ax, num_state_tests, results, column; scale)
+    end
+    linkxaxes!(axes...)
+    add_legend!(fig[num_rows+1, 1:num_cols])
+    fig
 end
+
+save_plot(name, fig) = save(joinpath(@__DIR__, "$name.png"), fig; px_per_unit = PX_PER_UNIT)
 
 num_state_tests = [1, 5, 10, 20, 30, 40, 50, 60]
 num_measurement_tests = [2, 4, 8, 16, 32, 64]
 tu_time = run_time_update_benchmarks(num_state_tests)
 tu_allocations = run_time_update_benchmarks(num_state_tests; allocation = true)
 
-tu_time_plot = plot_benchmarks(tu_time, num_state_tests; logscale = true)
-tu_alloc_plot = plot_benchmarks(
-    tu_allocations,
-    num_state_tests;
-    ylabel = "Allocations (kB)",
-    scale = 10^3,
+save_plot("tu_time", plot_benchmarks(tu_time, num_state_tests; logscale = true))
+save_plot(
+    "tu_alloc",
+    plot_benchmarks(
+        tu_allocations,
+        num_state_tests;
+        title = "Time update allocations",
+        ylabel = "Allocations (kB)",
+        scale = 10^3,
+    ),
 )
-
-png(tu_time_plot, "tu_time")
-png(tu_alloc_plot, "tu_alloc")
 
 mu_time = run_measurement_update_benchmarks(num_state_tests, num_measurement_tests)
 mu_allocations = run_measurement_update_benchmarks(
@@ -379,19 +402,17 @@ mu_allocations = run_measurement_update_benchmarks(
     allocation = true,
 )
 
-mu_time_plot = plot_benchmarks(
-    mu_time,
-    num_state_tests;
-    num_measurement_tests = num_measurement_tests,
-    logscale = true,
+save_plot(
+    "mu_time",
+    plot_benchmarks(mu_time, num_state_tests; num_measurement_tests, logscale = true),
 )
-mu_alloc_plot = plot_benchmarks(
-    mu_allocations,
-    num_state_tests;
-    num_measurement_tests = num_measurement_tests,
-    ylabel = "Allocations (kB)",
-    scale = 10^3,
+save_plot(
+    "mu_alloc",
+    plot_benchmarks(
+        mu_allocations,
+        num_state_tests;
+        num_measurement_tests,
+        ylabel = "Allocations (kB)",
+        scale = 10^3,
+    ),
 )
-
-png(mu_time_plot, "mu_time")
-png(mu_alloc_plot, "mu_alloc")
