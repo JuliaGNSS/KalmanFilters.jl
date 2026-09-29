@@ -174,12 +174,13 @@
             mu_alloc = measurement_update(x, cholesky(P), y, h, noise(cholesky(R)))
             @test get_covariance(mu_alloc) ≈ get_covariance(mu)
             @test get_state(mu_alloc) ≈ get_state(mu)
-            tu_inplace = time_update!(TU(T, num_x), x, cholesky(P), f!, noise(cholesky(Q)))
+            tu_inplace =
+                time_update!(TU(T, num_x), copy(x), cholesky(P), f!, noise(cholesky(Q)))
             @test get_covariance(tu_inplace) ≈ get_covariance(tu)
             @test get_state(tu_inplace) ≈ get_state(tu)
             mu_inplace = measurement_update!(
                 MU(T, num_x, num_y),
-                x,
+                copy(x),
                 cholesky(P),
                 y,
                 h!,

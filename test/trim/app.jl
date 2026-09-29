@@ -1,6 +1,8 @@
 # Entry point of the `juliac --trim=safe` check (see `check.jl`): one time update and
 # one measurement update through every filter, in-place and allocating, printed so
 # the trimmed executable's output can be compared against a regular Julia session.
+# The in-place updates write into their `x` and `P`, so each gets its own copy of
+# the prior and its measurement update continues from what it wrote.
 using KalmanFilters, LinearAlgebra
 using LazyArrays: @~
 # The EKF's default `AutoForwardDiff` backend is a DifferentiationInterface extension
@@ -64,7 +66,7 @@ function (@main)(args::Vector{String})::Cint
     tu = time_update(x, P, F, Q)
     report(io, "KF time update", tu)
     report(io, "KF measurement update", measurement_update(get_state(tu), get_covariance(tu), y, H, R))
-    tu! = time_update!(KFTUIntermediate(Float64, n), x, P, F, Q)
+    tu! = time_update!(KFTUIntermediate(Float64, n), copy(x), copy(P), F, Q)
     report(io, "KF! time update", tu!)
     report(io, "KF! measurement update",
         measurement_update!(KFMUIntermediate(Float64, n, m), get_state(tu!), get_covariance(tu!), y, H, R))
@@ -74,7 +76,7 @@ function (@main)(args::Vector{String})::Cint
     tu = time_update(x, P_chol, F, Q_chol)
     report(io, "SRKF time update", tu)
     report(io, "SRKF measurement update", measurement_update(get_state(tu), tu.covariance, y, H, R_chol))
-    tu! = time_update!(SRKFTUIntermediate(Float64, n), x, P_chol, F, Q_chol)
+    tu! = time_update!(SRKFTUIntermediate(Float64, n), copy(x), copy(P_chol), F, Q_chol)
     report(io, "SRKF! time update", tu!)
     report(io, "SRKF! measurement update",
         measurement_update!(SRKFMUIntermediate(Float64, n, m), get_state(tu!), tu!.covariance, y, H, R_chol))
@@ -83,7 +85,7 @@ function (@main)(args::Vector{String})::Cint
     tu = time_update(x, P, f, Q)
     report(io, "UKF time update", tu)
     report(io, "UKF measurement update", measurement_update(get_state(tu), get_covariance(tu), y, h, R))
-    tu! = time_update!(UKFTUIntermediate(Float64, n), x, P, f!, Q)
+    tu! = time_update!(UKFTUIntermediate(Float64, n), copy(x), copy(P), f!, Q)
     report(io, "UKF! time update", tu!)
     report(io, "UKF! measurement update",
         measurement_update!(UKFMUIntermediate(Float64, n, m), get_state(tu!), get_covariance(tu!), y, h!, R))
@@ -92,7 +94,7 @@ function (@main)(args::Vector{String})::Cint
     tu = time_update(x, P_chol, f, Q_chol)
     report(io, "SRUKF time update", tu)
     report(io, "SRUKF measurement update", measurement_update(get_state(tu), tu.covariance, y, h, R_chol))
-    tu! = time_update!(SRUKFTUIntermediate(Float64, n), x, P_chol, f!, Q_chol)
+    tu! = time_update!(SRUKFTUIntermediate(Float64, n), copy(x), copy(P_chol), f!, Q_chol)
     report(io, "SRUKF! time update", tu!)
     report(io, "SRUKF! measurement update",
         measurement_update!(SRUKFMUIntermediate(Float64, n, m), get_state(tu!), tu!.covariance, y, h!, R_chol))
@@ -101,7 +103,7 @@ function (@main)(args::Vector{String})::Cint
     tu = time_update(x, P, f, Augment(Q))
     report(io, "AUKF time update", tu)
     report(io, "AUKF measurement update", measurement_update(get_state(tu), get_covariance(tu), y, h, Augment(R)))
-    tu! = time_update!(AUKFTUIntermediate(Float64, n), x, P, f!, Augment(Q))
+    tu! = time_update!(AUKFTUIntermediate(Float64, n), copy(x), copy(P), f!, Augment(Q))
     report(io, "AUKF! time update", tu!)
     report(io, "AUKF! measurement update",
         measurement_update!(AUKFMUIntermediate(Float64, n, m), get_state(tu!), get_covariance(tu!), y, h!, Augment(R)))
@@ -111,7 +113,8 @@ function (@main)(args::Vector{String})::Cint
     report(io, "SRAUKF time update", tu)
     report(io, "SRAUKF measurement update",
         measurement_update(get_state(tu), tu.covariance, y, h, Augment(R_chol)))
-    tu! = time_update!(SRAUKFTUIntermediate(Float64, n), x, P_chol, f!, Augment(Q_chol))
+    tu! = time_update!(
+        SRAUKFTUIntermediate(Float64, n), copy(x), copy(P_chol), f!, Augment(Q_chol))
     report(io, "SRAUKF! time update", tu!)
     report(io, "SRAUKF! measurement update",
         measurement_update!(SRAUKFMUIntermediate(Float64, n, m), get_state(tu!), tu!.covariance, y, h!, Augment(R_chol)))

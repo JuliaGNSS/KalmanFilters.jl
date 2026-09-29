@@ -7,13 +7,16 @@ function make_linear_model(A)
     return model!
 end
 
+# The updates write into `x` and `P`, so each call gets its own copy of the prior.
 function allocations_time_update!(tu, x, P, f!::F, Q) where {F}
-    time_update!(tu, x, P, f!, Q)
+    time_update!(tu, copy(x), copy(P), f!, Q)
+    x, P = copy(x), copy(P)
     return @allocated time_update!(tu, x, P, f!, Q)
 end
 
 function allocations_measurement_update!(mu, x, P, y, h!::F, R) where {F}
-    measurement_update!(mu, x, P, y, h!, R)
+    measurement_update!(mu, copy(x), copy(P), y, h!, R)
+    x, P = copy(x), copy(P)
     return @allocated measurement_update!(mu, x, P, y, h!, R)
 end
 
@@ -103,14 +106,28 @@ end
         ("SRUKF", SRUKFTUIntermediate, SRUKFMUIntermediate, identity),
         ("SRAUKF", SRAUKFTUIntermediate, SRAUKFMUIntermediate, Augment),
     )
-        tu_upper = time_update!(TU(num_x), x, upper(P), f!, noise(upper(Q)))
-        tu_lower = time_update!(TU(num_x), x, lower(P), f!, noise(lower(Q)))
+        tu_upper = time_update!(TU(num_x), copy(x), upper(P), f!, noise(upper(Q)))
+        tu_lower = time_update!(TU(num_x), copy(x), lower(P), f!, noise(lower(Q)))
         @test get_state(tu_lower) ≈ get_state(tu_upper)
         @test get_covariance(tu_lower) ≈ get_covariance(tu_upper)
         @test allocations_time_update!(TU(num_x), x, lower(P), f!, noise(lower(Q))) == 0
 
-        mu_upper = measurement_update!(MU(num_x, num_y), x, upper(P), y, h!, noise(upper(R)))
-        mu_lower = measurement_update!(MU(num_x, num_y), x, lower(P), y, h!, noise(lower(R)))
+        mu_upper = measurement_update!(
+            MU(num_x, num_y),
+            copy(x),
+            upper(P),
+            y,
+            h!,
+            noise(upper(R)),
+        )
+        mu_lower = measurement_update!(
+            MU(num_x, num_y),
+            copy(x),
+            lower(P),
+            y,
+            h!,
+            noise(lower(R)),
+        )
         @test get_state(mu_lower) ≈ get_state(mu_upper)
         @test get_covariance(mu_lower) ≈ get_covariance(mu_upper)
         @test allocations_measurement_update!(
@@ -134,9 +151,8 @@ end
     Pᵪᵧ = randn(num_x, num_y)
     gain!(S_chol) = KalmanFilters.calc_kalman_gain_and_posterior_covariance!(
         zeros(num_x, num_y),
-        zeros(num_x, num_x),
         zeros(num_x),
-        P,
+        copy(P),
         copy(Pᵪᵧ),
         S_chol,
     )

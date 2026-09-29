@@ -104,6 +104,7 @@ end
 
 struct SRKFTUIntermediate{T}
     x_apri::Vector{T}
+    # Scratch for the new upper factor when `P` stores its lower one
     p_apri::Matrix{T}
     qr_tau::Vector{T}
     qr_space::Vector{T}
@@ -132,18 +133,19 @@ function time_update!(
     F::Union{Number,AbstractMatrix},
     Q::Cholesky,
 )
-    x_apri = calc_apriori_state!(tu.x_apri, x, F)
+    calc_apriori_state!(tu.x_apri, x, F)
+    copyto!(x, tu.x_apri)
     tu.puft_vcat_q[1:size(F, 1), :] .= @~ P.U * F'
     copy_upper_factor!(view(tu.puft_vcat_q, (size(F, 1)+1):size(tu.puft_vcat_q, 1), :), Q)
     R = calc_upper_triangular_of_stacked_qr_inplace!(
-        tu.p_apri,
+        upper_factor_target(P, tu.p_apri),
         tu.puft_vcat_q,
         tu.qr_tau,
         tu.qr_space,
     )
     correct_cholesky_sign!(R)
-    P_apri = Cholesky(R, 'U', 0)
-    KFTimeUpdate(x_apri, P_apri)
+    store_upper_factor!(P, R)
+    KFTimeUpdate(x, P)
 end
 
 struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
@@ -153,7 +155,6 @@ struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     qr_tau::Vector{T}
     qr_space::Vector{T}
     R::Matrix{T}
-    x_posterior::Vector{T}
 end
 
 function SRKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
@@ -167,7 +168,6 @@ function SRKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
         qr_tau,
         Vector{T}(undef, qr_space_length),
         Matrix{T}(undef, num_x + num_y, num_x + num_y),
-        Vector{T}(undef, num_x),
     )
 end
 
@@ -196,9 +196,9 @@ function measurement_update!(
     S = Cholesky(@view(RU[1:dim_y, 1:dim_y]), 'U', 0)
     # `S.L` would copy the factor on Julia 1.10; the lazy adjoint of the upper one doesn't.
     K = calc_kalman_gain!(mu.kalman_gain, PHᵀ, UpperTriangular(S.factors)')
-    x_post = calc_posterior_state!(mu.x_posterior, x, K, ỹ)
-    P_post = Cholesky(@view(RU[(dim_y+1):end, (dim_y+1):end]), 'U', 0)
-    KFMeasurementUpdate(x_post, P_post, ỹ, S, K)
+    calc_posterior_state!(x, K, ỹ)
+    store_upper_factor!(P, @view(RU[(dim_y+1):end, (dim_y+1):end]))
+    KFMeasurementUpdate(x, P, ỹ, S, K)
 end
 
 function calc_kalman_gain!(K, PHᵀ, SL::LowerTriangular)

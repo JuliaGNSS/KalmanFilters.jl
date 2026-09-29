@@ -8,8 +8,8 @@
         Q = randn(2, 2)
         P = randn(2, 2)
         FP = similar(P)
-        P_apri = similar(P)
-        @test KalmanFilters.calc_apriori_covariance!(P_apri, FP, P, F, Q) ≈ F * P * F' .+ Q
+        P_apri = copy(P)
+        @test KalmanFilters.calc_apriori_covariance!(P_apri, FP, F, Q) ≈ F * P * F' .+ Q
     end
 
     @testset "Measurement update inplace functions" begin
@@ -33,16 +33,16 @@
         @test KalmanFilters.calc_kalman_gain!(S_lu, K, PHᵀ, S) ≈ PHᵀ / S
 
         x = randn(2)
-        x_posterior = similar(x)
+        x_posterior = copy(x)
         K = randn(2, 2)
         ỹ = randn(2)
-        @test KalmanFilters.calc_posterior_state!(x_posterior, x, K, ỹ) ≈ x .+ K * ỹ
+        @test KalmanFilters.calc_posterior_state!(x_posterior, K, ỹ) ≈ x .+ K * ỹ
 
         P = randn(2, 2)
-        P_posterior = similar(P)
+        P_posterior = copy(P)
         PHᵀ = randn(2, 2)
         K = randn(2, 2)
-        @test KalmanFilters.calc_posterior_covariance!(P_posterior, P, PHᵀ, K) ≈
+        @test KalmanFilters.calc_posterior_covariance!(P_posterior, PHᵀ, K) ≈
               P .- PHᵀ * K'
     end
 
@@ -58,7 +58,7 @@
         @test get_covariance(tu) == [2.0 0.0; 0.0 5.0]
 
         tu_inter = KFTUIntermediate(2)
-        tu = time_update!(tu_inter, x, P, F, Q)
+        tu = time_update!(tu_inter, Vector(x), Matrix(P), F, Q)
         @test get_state(tu) == [1.0, 2.0]
         @test get_covariance(tu) == [2.0 0.0; 0.0 5.0]
     end
@@ -79,7 +79,7 @@
         @test get_kalman_gain(mu) == [0.5 0.0; 0.0 0.5]
 
         mu_inter = KFMUIntermediate(2, 2)
-        mu = measurement_update!(mu_inter, x, P, y, H, R)
+        mu = measurement_update!(mu_inter, Vector(x), Matrix(P), y, H, R)
         @test get_state(mu) == [1.0, 1.0]
         @test get_covariance(mu) ≈ [0.5 0.0; 0.0 0.5]
         @test get_innovation(mu) == [0.0, 0.0]
@@ -103,7 +103,7 @@
         y_temp = [y]
         R_temp = [R]
         mu_inter = KFMUIntermediate(2, 1)
-        mu = measurement_update!(mu_inter, x, P, y_temp, H_temp, R_temp)
+        mu = measurement_update!(mu_inter, Vector(x), Matrix(P), y_temp, H_temp, R_temp)
         @test get_state(mu) == [1.0, 1.0]
         @test get_covariance(mu) ≈ [0.5 0.0; 0.0 1.0]
         @test get_innovation(mu) == [0.0]

@@ -118,7 +118,21 @@ This module provides two consistency tests
 
 ## Benchmarks
 
-This module was build with performance in mind. For almost all variants of the Kalman-Filter you will find an inplace version. The inplace version is marked with an exclamation mark like e.g. `time_update!` and `measurement_update!`. The intermediate results are saved into an pre-allocated buffer. That's
+This module was build with performance in mind. For almost all variants of the Kalman-Filter you will find an in-place version, marked with an exclamation mark like e.g. `time_update!` and `measurement_update!`. It writes the new state into `x` and the new covariance into `P` (a `Cholesky` into the factor it stores, upper or lower), so `x` and `P` must be mutable, e.g. a `Vector` and a `Matrix`; the intermediate results go into a pre-allocated buffer passed as the first argument. The returned update is the same as the allocating variant's, with its state and covariance being `x` and `P` themselves, so a filter loop needs no `get_state` / `get_covariance` at all:
+```julia
+tu_buffer = KFTUIntermediate(3)
+mu_buffer = KFMUIntermediate(3, 1)
+x = copy(x_init)
+P = copy(P_init)
+for i = 1:100
+    measurement = [2.0 + randn()]
+    time_update!(tu_buffer, x, P, F, Q)
+    mu = measurement_update!(mu_buffer, x, P, measurement, Matrix(H), [R])
+    # x and P now hold the posterior; `mu` still gives the innovation, its
+    # covariance and the Kalman gain
+end
+```
+The buffers are
 
 Buffer | Variant
 --- | ---

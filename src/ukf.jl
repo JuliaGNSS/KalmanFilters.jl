@@ -3,8 +3,6 @@ struct UKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix{T
     xi_temp::X
     transformed_sigma_points::TS
     unbiased_sigma_points::TS
-    x_apri::Vector{T}
-    p_apri::Matrix{T}
 end
 
 UKFTUIntermediate(::Type{T}, num_x::Number) where {T} = UKFTUIntermediate(
@@ -20,8 +18,6 @@ UKFTUIntermediate(::Type{T}, num_x::Number) where {T} = UKFTUIntermediate(
         Matrix{T}(undef, num_x, 2 * num_x),
         MeanSetWeightingParameters(0.0),
     ),
-    Vector{T}(undef, num_x),
-    Matrix{T}(undef, num_x, num_x),
 )
 
 UKFTUIntermediate(num_x::Number) = UKFTUIntermediate(Float64, num_x)
@@ -37,8 +33,6 @@ struct UKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix{T
     cross_covariance::Matrix{T}
     s_chol::Matrix{T}
     kalman_gain::Matrix{T}
-    x_posterior::Vector{T}
-    p_posterior::Matrix{T}
 end
 
 function UKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
@@ -61,8 +55,6 @@ function UKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
         Matrix{T}(undef, num_x, num_y),
         Matrix{T}(undef, num_y, num_y),
         Matrix{T}(undef, num_x, num_y),
-        Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x),
     )
 end
 
@@ -86,6 +78,9 @@ function time_update(
     SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
+# In place: the sigma points are drawn from `x` and `P` (copied into the intermediate)
+# before either is written, so the a priori mean lands directly in `x` and the a priori
+# covariance in `P`.
 function time_update!(
     tu::UKFTUIntermediate,
     x,
@@ -96,9 +91,9 @@ function time_update!(
 ) where {F}
     χₖ₋₁ = calc_sigma_points!(tu.P_chol, x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform!(tu.transformed_sigma_points, tu.xi_temp, f!, χₖ₋₁)
-    x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
+    x_apri = mean!(x, χₖ₍ₖ₋₁₎)
     unbiased_χₖ₍ₖ₋₁₎ = substract_mean!(tu.unbiased_sigma_points, χₖ₍ₖ₋₁₎, x_apri)
-    P_apri = cov!(tu.p_apri, unbiased_χₖ₍ₖ₋₁₎, Q)
+    P_apri = cov!(caller_covariance(P), unbiased_χₖ₍ₖ₋₁₎, Q)
     SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
 end
 
@@ -145,20 +140,8 @@ function measurement_update!(
     S = cov!(mu.innovation_covariance, unbiased_𝓨, R)
     Pᵪᵧ = cov!(mu.cross_covariance, χₖ₍ₖ₋₁₎, unbiased_𝓨)
     mu.ỹ .= y .- y_est
-    K, P_posterior = calc_kalman_gain_and_posterior_covariance!(
-        mu.s_chol,
-        mu.kalman_gain,
-        mu.p_posterior,
-        P,
-        Pᵪᵧ,
-        S,
-    )
-    x_posterior = calc_posterior_state!(mu.x_posterior, x, K, mu.ỹ)
+    K = calc_kalman_gain!(mu.s_chol, mu.kalman_gain, Pᵪᵧ, S)
+    P_posterior = calc_posterior_covariance!(caller_covariance(P), Pᵪᵧ, K)
+    x_posterior = calc_posterior_state!(x, K, mu.ỹ)
     SPMeasurementUpdate(x_posterior, P_posterior, 𝓨, mu.ỹ, S, K)
-end
-
-function calc_kalman_gain_and_posterior_covariance!(s_chol, kalman_gain, p_post, P, Pᵪᵧ, S)
-    K = calc_kalman_gain!(s_chol, kalman_gain, Pᵪᵧ, S)
-    P_posterior = calc_posterior_covariance!(p_post, P, Pᵪᵧ, K)
-    K, P_posterior
 end
