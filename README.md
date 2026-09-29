@@ -146,7 +146,7 @@ There is a benchmark to compare the different implementations in the benchmark f
 ![Measurement update timings](benchmark/mu_time.png)
 ![Measurement update allocations](benchmark/mu_alloc.png)
 
-The inplace variants do not allocate and are at least as fast as the allocating variants. For the (linear) Kalman-Filter and the Square-Root Kalman-Filter the gain shrinks for larger numbers of states, because the runtime is then dominated by the matrix products and the QR decomposition, which both variants share.
+The inplace variants do not allocate and are faster than the allocating variants. For the (linear) Kalman-Filter and the Square-Root Kalman-Filter the gain shrinks for larger numbers of states, because the runtime is then dominated by the matrix products and the QR decomposition, which both variants share. For the Square-Root Kalman-Filter measurement update with many states and measurements, both variants are about equally fast.
 
 ### Benchmark CI
 

@@ -3,15 +3,11 @@ function calc_upper_triangular_of_qr(A)
     R
 end
 
-function calc_upper_triangular_of_qr(A::Matrix)
-    A_temp = copy(A)
-    R, = LAPACK.gels!('N', A_temp, zeros(eltype(A), size(A, 1), 1))
-    R
-end
+calc_upper_triangular_of_qr(A::Matrix) = calc_upper_triangular_of_qr!(copy(A))
 
 function calc_upper_triangular_of_qr!(A)
-    R, = LAPACK.gels!('N', A, zeros(eltype(A), size(A, 1), 1))
-    R
+    LAPACK.geqrf!(A)
+    triu!(A[1:min(size(A)...), :])
 end
 
 """
@@ -121,19 +117,19 @@ end
 struct SRKFTUIntermediate{T}
     x_apri::Vector{T}
     p_apri::Matrix{T}
-    qr_zeros::Vector{T}
+    qr_tau::Vector{T}
     qr_space::Vector{T}
     puft_vcat_q::Matrix{T}
 end
 
 function SRKFTUIntermediate(::Type{T}, num_x::Number) where {T}
-    qr_zeros = zeros(T, 2 * num_x)
+    qr_tau = zeros(T, num_x)
     puft_vcat_q = Matrix{T}(undef, 2 * num_x, num_x)
-    qr_space_length = calc_gels_working_size(puft_vcat_q, qr_zeros)
+    qr_space_length = calc_geqrf_working_size(puft_vcat_q)
     SRKFTUIntermediate(
         Vector{T}(undef, num_x),
         Matrix{T}(undef, num_x, num_x),
-        qr_zeros,
+        qr_tau,
         Vector{T}(undef, qr_space_length),
         puft_vcat_q,
     )
@@ -141,8 +137,8 @@ end
 
 SRKFTUIntermediate(num_x::Number) = SRKFTUIntermediate(Float64, num_x)
 
-function calc_upper_triangular_of_qr_inplace!(res, A, B, space)
-    mygels!(res, A, B, space)
+function calc_upper_triangular_of_qr_inplace!(res, A, tau, work)
+    mygeqrf!(res, A, tau, work)
 end
 
 function time_update!(
@@ -158,7 +154,7 @@ function time_update!(
     R = calc_upper_triangular_of_qr_inplace!(
         tu.p_apri,
         tu.puft_vcat_q,
-        tu.qr_zeros,
+        tu.qr_tau,
         tu.qr_space,
     )
     correct_cholesky_sign!(R)
@@ -170,21 +166,21 @@ struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
     innovation::Vector{T}
     kalman_gain::K
     m::Matrix{T}
-    qr_zeros::Vector{T}
+    qr_tau::Vector{T}
     qr_space::Vector{T}
     R::Matrix{T}
     x_posterior::Vector{T}
 end
 
 function SRKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
-    qr_zeros = zeros(T, num_x + num_y)
+    qr_tau = zeros(T, num_x + num_y)
     M = Matrix{T}(undef, num_x + num_y, num_x + num_y)
-    qr_space_length = calc_gels_working_size(M, qr_zeros)
+    qr_space_length = calc_geqrf_working_size(M)
     SRKFMUIntermediate(
         Vector{T}(undef, num_y),
         Matrix{T}(undef, num_x, num_y),
         M,
-        qr_zeros,
+        qr_tau,
         Vector{T}(undef, qr_space_length),
         Matrix{T}(undef, num_x + num_y, num_x + num_y),
         Vector{T}(undef, num_x),
@@ -210,7 +206,7 @@ function measurement_update!(
     M[1:dim_y, (dim_y+1):end] .= zero(eltype(M))
     M[(dim_y+1):end, 1:dim_y] .= @~ P.U * H'
     M[(dim_y+1):end, (dim_y+1):end] .= P.U
-    RU = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_zeros, mu.qr_space)
+    RU = calc_upper_triangular_of_qr_inplace!(mu.R, M, mu.qr_tau, mu.qr_space)
     correct_cholesky_sign!(RU)
     PHᵀ = (@view(RU[1:dim_y, (dim_y+1):end]))'
     S = Cholesky(@view(RU[1:dim_y, 1:dim_y]), 'U', 0)
