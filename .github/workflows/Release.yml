@@ -6,6 +6,15 @@ on:
     branches:
       - master
 
+# Only one release run at a time. A run can block for a while below (waiting for the
+# previous version to land in General), and a second run must not register its version
+# in the meantime. Queued runs are not cancelled mid-flight; if several pushes queue up,
+# GitHub keeps only the newest pending run, which is fine because semantic-release picks
+# up all unreleased commits.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Release
@@ -28,6 +37,24 @@ jobs:
             @ethima/semantic-release-configuration
           extra_plugins: |
             @ethima/semantic-release-configuration
+      # JuliaRegistrator can only register a version once the previous one is in the General
+      # registry, so wait for it before asking for the next registration.
+      - name: Wait for previous version to be registered
+        if: steps.semantic-release.outputs.new_release_published == 'true' && steps.semantic-release.outputs.last_release_version != ''
+        timeout-minutes: 180
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_VERSION: ${{ steps.semantic-release.outputs.last_release_version }}
+        run: |
+          name=$(sed -n 's/^name = "\(.*\)"/\1/p' Project.toml)
+          path="${name:0:1}/${name}/Versions.toml"
+          echo "Waiting for ${name} v${PREVIOUS_VERSION} in JuliaRegistries/General (${path})"
+          until gh api "repos/JuliaRegistries/General/contents/${path}" --jq .content 2>/dev/null \
+              | base64 -d | grep -qF "[\"${PREVIOUS_VERSION}\"]"; do
+            echo "$(date -u +%T) v${PREVIOUS_VERSION} not registered yet, checking again in 60 s"
+            sleep 60
+          done
+          echo "v${PREVIOUS_VERSION} is registered"
       - name: Notify JuliaRegistrator of new release
         uses: peter-evans/commit-comment@v4
         if: steps.semantic-release.outputs.new_release_published == 'true'
