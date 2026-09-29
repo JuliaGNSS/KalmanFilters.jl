@@ -1,0 +1,19 @@
+name: Commit Messages
+on:
+  pull_request:
+jobs:
+  breaking-changes:
+    # Checks each commit in the PR (for a squash merge, the squashed message is
+    # not checked, so keep the PR title and description in the same form). Checks that breaking changes use a `BREAKING CHANGE:` footer
+    # (not `feat!:` or `BREAKING:`), which is the only form that ends up in the
+    # release notes the General registry's AutoMerge requires to mention them.
+    name: Breaking-change notation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check commit messages
+        run: >
+          .github/scripts/check-commit-messages.sh
+          ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
