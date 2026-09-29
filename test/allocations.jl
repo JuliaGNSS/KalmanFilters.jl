@@ -20,7 +20,7 @@ end
 @testset "In-place updates do not allocate ($num_x states, $num_y measurements)" for (
     num_x,
     num_y,
-) in ((2, 2), (10, 4), (40, 36), (70, 8))
+) in ((2, 2), (10, 4), (40, 36), (70, 8), (100, 30))
     random_pos_def(n) = (A = randn(n, n); A'A + n * I)
     x = randn(num_x)
     P = random_pos_def(num_x)

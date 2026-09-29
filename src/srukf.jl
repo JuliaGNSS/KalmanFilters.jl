@@ -132,30 +132,6 @@ function cov!(
     S
 end
 
-# Writes the upper Cholesky factor of `C` including the zeros below the diagonal into
-# `dest`. It reads `factors` directly: `Cholesky`'s `U`/`L` properties are type-unstable
-# (their argument is a `Matrix`/`Adjoint` union), so they allocate a wrapper on every
-# call, and assigning a triangular wrapper goes through a slow generic `setindex!`.
-function copy_upper_factor!(dest, C::Cholesky)
-    A = C.factors
-    is_upper = C.uplo === 'U'
-    @inbounds for j in axes(A, 2)
-        if is_upper
-            for i = 1:j
-                dest[i, j] = A[i, j]
-            end
-        else
-            for i = 1:j
-                dest[i, j] = conj(A[j, i])
-            end
-        end
-        for i = (j+1):size(A, 1)
-            dest[i, j] = zero(eltype(dest))
-        end
-    end
-    dest
-end
-
 function cov(χ::TransformedSigmaPoints, noise::Augment{<:Cholesky})
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     A = sqrt(weight_i) * χ.xi'

@@ -1,35 +1,77 @@
 @testset "Square root Kalman filter" begin
-    @testset "Calculate upper triangular of QR" begin
+    @testset "Calculate upper triangular of QR with $T" for T in (
+        Float64,
+        Float32,
+        ComplexF64,
+        ComplexF32,
+    )
+        A = randn(T, 10, 5)
+        R = qr(A).R
+        @test @inferred(KalmanFilters.calc_upper_triangular_of_qr(A)) ≈ R
+        @test @inferred(KalmanFilters.calc_upper_triangular_of_qr!(copy(A))) ≈ R
+        stacked = [A; triu(randn(T, 5, 5))]
+        @test KalmanFilters.calc_upper_triangular_of_qr!(
+            copy(stacked),
+            KalmanFilters.calc_upper_triangular_of_stacked_qr_inplace!,
+        ) ≈ qr(stacked).R
+    end
+
+    @testset "Calculate upper triangular of QR without LAPACK" begin
         A = randn(10, 5)
-        R_test = @inferred KalmanFilters.calc_upper_triangular_of_qr!(copy(A))
+        R = qr(A).R
+        @test KalmanFilters.calc_upper_triangular_of_qr(SMatrix{10,5}(A)) ≈ R
+        @test KalmanFilters.calc_upper_triangular_of_qr!(big.(A)) ≈ R
+    end
 
-        Q, R = qr(A)
-        @test R_test ≈ R ≈ KalmanFilters.calc_upper_triangular_of_qr(A)
+    # Sizes on both sides of the threshold at which the blocked LAPACK kernels take over
+    @testset "Upper triangular of QR with $T, $num_dense_rows × $n dense rows" for T in (
+            Float64,
+            Float32,
+            ComplexF64,
+            ComplexF32,
+        ),
+        (num_dense_rows, n) in ((2, 1), (10, 5), (20, 10), (80, 40), (140, 70))
 
-        qr_tau = zeros(5)
-        qr_space_length = @inferred KalmanFilters.calc_geqrf_working_size(A)
-        qr_space = zeros(qr_space_length)
-        R_res = zeros(5, 5)
-        R_test_inplace = @inferred KalmanFilters.calc_upper_triangular_of_qr_inplace!(
-            R_res,
-            copy(A),
-            qr_tau,
-            qr_space,
+        U = triu(randn(T, n, n))
+        A = [randn(T, num_dense_rows, n); U]
+        A_dense = randn(T, num_dense_rows + n, n)
+        workspace_length = @inferred KalmanFilters.calc_qr_workspace_length(A)
+        tau = zeros(T, workspace_length)
+        work = zeros(T, workspace_length)
+        native_stacked!(R, A, tau, work) =
+            KalmanFilters.householder_upper_triangular!(R, A, num_dense_rows)
+        native_dense!(R, A, tau, work) =
+            KalmanFilters.householder_upper_triangular!(R, A, size(A, 1))
+        for (qr!, B) in (
+            (KalmanFilters.calc_upper_triangular_of_stacked_qr_inplace!, A),
+            (native_stacked!, A),
+            (KalmanFilters.mytpqrt!, A),
+            (KalmanFilters.calc_upper_triangular_of_dense_qr_inplace!, A_dense),
+            (native_dense!, A_dense),
+            (KalmanFilters.mygeqrt!, A_dense),
         )
-        @test R_test_inplace ≈ R
-        @test istriu(R_test_inplace)
-
-        @testset "with $T" for T in (Float32, ComplexF64, ComplexF32)
-            A_T = randn(T, 10, 5)
-            R_T = zeros(T, 5, 5)
-            KalmanFilters.calc_upper_triangular_of_qr_inplace!(
-                R_T,
-                copy(A_T),
-                zeros(T, 5),
-                zeros(T, KalmanFilters.calc_geqrf_working_size(A_T)),
-            )
-            @test R_T ≈ qr(A_T).R
+            R = zeros(T, n, n)
+            @test qr!(R, copy(B), tau, work) === R
+            @test istriu(R)
+            @test abs.(R) ≈ abs.(qr(B).R)
+            @test R' * R ≈ B' * B
         end
+        @test_throws DimensionMismatch KalmanFilters.mytpqrt!(
+            zeros(T, n, n),
+            copy(A),
+            zeros(T, n - 1),
+            work,
+        )
+    end
+
+    @testset "Native upper triangular of QR with entries of magnitude $scale" for scale in (
+        1e-170,
+        1e170,
+    )
+        A = scale .* [randn(6, 3); triu(randn(3, 3))]
+        R = KalmanFilters.householder_upper_triangular!(zeros(3, 3), copy(A), 6)
+        @test all(isfinite, R)
+        @test abs.(R) ≈ abs.(qr(A).R)
     end
 
     @testset "Time update with $T type $t" for T in (Float64, ComplexF64),
@@ -108,5 +150,46 @@
         mu_chol = @inferred measurement_update(x, P_chol, y, H, R_chol)
         @test @inferred(get_covariance(mu_chol)) ≈ get_covariance(mu)
         @test @inferred(get_state(mu_chol)) ≈ get_state(mu)
+    end
+
+    # Covers the native QR and the blocked `tpqrt` (time update)/`geqrt` (measurement update)
+    @testset "Updates with $num_x states and $num_y measurements with $T" for T in (
+            Float64,
+            ComplexF64,
+        ),
+        (num_x, num_y) in ((10, 4), (70, 8), (100, 30))
+
+        random_pos_def(n) = (A = randn(T, n, n); Hermitian(A'A + n * I))
+        x = randn(T, num_x)
+        P = random_pos_def(num_x)
+        Q = random_pos_def(num_x)
+        R = random_pos_def(num_y)
+        y = randn(T, num_y)
+        F = randn(T, num_x, num_x)
+        H = randn(T, num_y, num_x)
+
+        tu = time_update(x, Matrix(P), F, Matrix(Q))
+        tu_alloc = time_update(x, cholesky(P), F, cholesky(Q))
+        tu_inplace =
+            time_update!(SRKFTUIntermediate(T, num_x), x, cholesky(P), F, cholesky(Q))
+        for tu_chol in (tu_alloc, tu_inplace)
+            @test get_covariance(tu_chol) ≈ get_covariance(tu)
+            @test get_state(tu_chol) ≈ get_state(tu)
+        end
+
+        mu = measurement_update(x, Matrix(P), y, H, Matrix(R))
+        mu_alloc = measurement_update(x, cholesky(P), y, H, cholesky(R))
+        mu_inplace = measurement_update!(
+            SRKFMUIntermediate(T, num_x, num_y),
+            x,
+            cholesky(P),
+            y,
+            H,
+            cholesky(R),
+        )
+        for mu_chol in (mu_alloc, mu_inplace)
+            @test get_covariance(mu_chol) ≈ get_covariance(mu)
+            @test get_state(mu_chol) ≈ get_state(mu)
+        end
     end
 end
