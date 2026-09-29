@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.10...v0.1.11) (2026-09-29)
+
+
+### Performance Improvements
+
+* speed up the square root filters ([#37](https://github.com/JuliaGNSS/KalmanFilters.jl/issues/37)) ([bbf457a](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/bbf457aacc3d1ff31dc7883203410a25f59d6831))
+
 ## [0.1.10](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.9...v0.1.10) (2026-09-28)
 
 
