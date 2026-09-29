@@ -20,7 +20,7 @@ end
 @testset "In-place updates do not allocate ($num_x states, $num_y measurements)" for (
     num_x,
     num_y,
-) in ((2, 2), (10, 4))
+) in ((2, 2), (10, 4), (40, 36), (70, 8))
     random_pos_def(n) = (A = randn(n, n); A'A + n * I)
     x = randn(num_x)
     P = random_pos_def(num_x)
@@ -135,6 +135,7 @@ end
     gain!(S_chol) = KalmanFilters.calc_kalman_gain_and_posterior_covariance!(
         zeros(num_x, num_y),
         zeros(num_x, num_x),
+        zeros(num_x),
         P,
         copy(Pᵪᵧ),
         S_chol,

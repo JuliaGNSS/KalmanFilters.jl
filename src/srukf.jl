@@ -13,9 +13,9 @@ end
 
 function SRUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
     xi_temp = Vector{T}(undef, num_x)
-    qr_tau = zeros(T, num_x)
     qr_A = Matrix{T}(undef, 3 * num_x, num_x)
-    qr_space_length = calc_geqrf_working_size(qr_A)
+    qr_tau = zeros(T, calc_qr_workspace_length(qr_A))
+    qr_space_length = calc_qr_workspace_length(qr_A)
     SRUKFTUIntermediate(
         Matrix{T}(undef, num_x, num_x),
         xi_temp,
@@ -56,12 +56,13 @@ struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
     kalman_gain::Matrix{T}
     x_posterior::Vector{T}
     p_posterior::Matrix{T}
+    downdate_temp::Vector{T}
 end
 
 function SRUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
-    qr_tau = zeros(T, num_y)
     qr_A = Matrix{T}(undef, 2 * num_x + num_y, num_y)
-    qr_space_length = calc_geqrf_working_size(qr_A)
+    qr_tau = zeros(T, calc_qr_workspace_length(qr_A))
+    qr_space_length = calc_qr_workspace_length(qr_A)
     SRUKFMUIntermediate(
         Matrix{T}(undef, num_x, num_x),
         Vector{T}(undef, num_x),
@@ -86,6 +87,7 @@ function SRUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
         Matrix{T}(undef, num_x, num_y),
         Vector{T}(undef, num_x),
         Matrix{T}(undef, num_x, num_x),
+        Vector{T}(undef, num_x),
     )
 end
 
@@ -95,7 +97,7 @@ SRUKFMUIntermediate(num_x::Number, num_y::Number) =
 function cov(χ::TransformedSigmaPoints, noise::Cholesky)
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     A = vcat(sqrt(weight_i) * χ.xi', noise.uplo === 'U' ? noise.U : noise.L')
-    R = calc_upper_triangular_of_qr!(A)
+    R = calc_upper_triangular_of_qr!(A, calc_upper_triangular_of_stacked_qr_inplace!)
     correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     if weight_0 < 0
@@ -117,14 +119,8 @@ function cov!(
 )
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     qr_A[1:size(χ.xi, 2), :] .= sqrt(weight_i) .* χ.xi'
-    # Wrap `factors` directly: `Cholesky`'s `U`/`L` properties are type-unstable (their
-    # argument is a `Matrix`/`Adjoint` union), so they allocate a wrapper on every call.
-    if noise.uplo === 'U'
-        qr_A[(size(χ.xi, 2)+1):end, :] = UpperTriangular(noise.factors)
-    else
-        qr_A[(size(χ.xi, 2)+1):end, :] = LowerTriangular(noise.factors)'
-    end
-    R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_tau, qr_space)
+    copy_upper_factor!(view(qr_A, (size(χ.xi, 2)+1):size(qr_A, 1), :), noise)
+    R = calc_upper_triangular_of_stacked_qr_inplace!(res, qr_A, qr_tau, qr_space)
     correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     x0_temp .= sqrt(abs(weight_0)) .* χ.x0
@@ -136,10 +132,34 @@ function cov!(
     S
 end
 
+# Writes the upper Cholesky factor of `C` including the zeros below the diagonal into
+# `dest`. It reads `factors` directly: `Cholesky`'s `U`/`L` properties are type-unstable
+# (their argument is a `Matrix`/`Adjoint` union), so they allocate a wrapper on every
+# call, and assigning a triangular wrapper goes through a slow generic `setindex!`.
+function copy_upper_factor!(dest, C::Cholesky)
+    A = C.factors
+    is_upper = C.uplo === 'U'
+    @inbounds for j in axes(A, 2)
+        if is_upper
+            for i = 1:j
+                dest[i, j] = A[i, j]
+            end
+        else
+            for i = 1:j
+                dest[i, j] = conj(A[j, i])
+            end
+        end
+        for i = (j+1):size(A, 1)
+            dest[i, j] = zero(eltype(dest))
+        end
+    end
+    dest
+end
+
 function cov(χ::TransformedSigmaPoints, noise::Augment{<:Cholesky})
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     A = sqrt(weight_i) * χ.xi'
-    R = calc_upper_triangular_of_qr!(A)
+    R = calc_upper_triangular_of_qr!(A, calc_upper_triangular_of_dense_qr_inplace!)
     correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     if weight_0 < 0
@@ -161,7 +181,7 @@ function cov!(
 )
     weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
     qr_A .= sqrt(weight_i) .* χ.xi'
-    R = calc_upper_triangular_of_qr_inplace!(res, qr_A, qr_tau, qr_space)
+    R = calc_upper_triangular_of_dense_qr_inplace!(res, qr_A, qr_tau, qr_space)
     correct_cholesky_sign!(R)
     S = Cholesky(R, 'U', 0)
     x0_temp .= sqrt(abs(weight_0)) .* χ.x0
@@ -174,52 +194,82 @@ function cov!(
 end
 
 """
-    lowrankdowndate_columns!(C::Cholesky, V::AbstractMatrix) -> C
+    lowrankdowndate_columns!(C::Cholesky, V::AbstractMatrix, temp = similar(V, size(V, 1))) -> C
 
-Downdates the Cholesky factorization `C` of `A` to the factorization of `A - V * V'`
-by applying `LinearAlgebra.lowrankdowndate!` for each column of `V`. It uses the same
-Givens rotations, but without bounds checks and with a multiplication instead of a
-division in the inner loop, which makes it about twice as fast. Like
-`lowrankdowndate!`, it overwrites `V`.
+Downdates the Cholesky factorization `C` of `A` to the factorization of `A - V * V'`.
+The result is the same as applying `LinearAlgebra.lowrankdowndate!` for each column of
+`V`, and like `lowrankdowndate!`, it overwrites `V`.
+
+The Givens rotation of row `i` and column `l` only depends on the rotations of the
+previous row with the same column and of the previous column in the same row. Hence,
+instead of downdating all rows with one column after the other, this applies all columns
+to one row after the other. Every inner loop then runs over contiguous memory (a column
+of `V` and a row of the factor, which is copied into `temp` for an upper factor), so it
+vectorizes, and it multiplies by the inverse instead of dividing.
 """
-function lowrankdowndate_columns!(C::Cholesky, V::AbstractMatrix)
+function lowrankdowndate_columns!(
+    C::Cholesky,
+    V::AbstractMatrix,
+    temp::AbstractVector = similar(V, size(V, 1)),
+)
     A = C.factors
     n = size(A, 1)
     if size(V, 1) != n
         throw(DimensionMismatch("updating vectors must fit size of factorization"))
     end
-    is_upper = C.uplo === 'U'
-    for l in axes(V, 2)
-        v = view(V, :, l)
-        is_upper && conj!(v)
+    if C.uplo === 'U'
+        length(temp) >= n ||
+            throw(DimensionMismatch("temp has length $(length(temp)), but needs $n"))
+        conj!(V)
         @inbounds for i = 1:n
-            Aii = A[i, i]
-            # Compute Givens rotation
-            s = conj(v[i] / Aii)
-            s2 = abs2(s)
-            s2 > 1 && throw(PosDefException(i))
-            c = sqrt(1 - s2)
-            inv_c = inv(c)
-            A[i, i] = c * Aii
-            # Update remaining elements in row/column
-            if is_upper
-                for j = (i+1):n
-                    vj = v[j]
-                    Aij = (A[i, j] - s * vj) * inv_c
-                    A[i, j] = Aij
-                    v[j] = -s' * Aij + c * vj
-                end
-            else
-                for j = (i+1):n
-                    vj = v[j]
-                    Aji = (A[j, i] - s * vj) * inv_c
-                    A[j, i] = Aji
-                    v[j] = -s' * Aji + c * vj
-                end
+            for j = i:n
+                temp[j] = A[i, j]
             end
+            downdate_row!(temp, V, i)
+            for j = i:n
+                A[i, j] = temp[j]
+            end
+        end
+    else
+        @inbounds for i = 1:n
+            downdate_row!(view(A, :, i), V, i)
         end
     end
     C
+end
+
+# Applies the Givens rotations of all columns of `V` to row `i` of the factor, whose
+# elements `i:n` are given in `r`, and to the elements `i+1:n` of the columns of `V`.
+#
+# Each rotation depends on the diagonal element left by the previous one. Computing the
+# new diagonal element as `c * rii` would chain a division and a square root from one
+# rotation to the next. Its squared magnitude, however, is simply
+# `abs2(rii) - abs2(V[i, l])`, so only that subtraction is on the chain, and the
+# divisions and square roots of consecutive rotations can overlap.
+@inline function downdate_row!(r, V, i)
+    n = size(V, 1)
+    @inbounds rii = r[i]
+    d = abs2(rii)
+    @inbounds for l in axes(V, 2)
+        vi = V[i, l]
+        d_new = d - abs2(vi)
+        # Equivalent to abs2(s) > 1 in `LinearAlgebra.lowrankdowndate!`
+        d_new < 0 && throw(PosDefException(i))
+        # conj(vi / rii) without a complex division
+        s = conj(vi) * (rii / d)
+        c = sqrt(d_new / d)
+        inv_c = inv(c)
+        rii *= c
+        d = d_new
+        @simd for j = (i+1):n
+            vj = V[j, l]
+            rj = (r[j] - s * vj) * inv_c
+            r[j] = rj
+            V[j, l] = -s' * rj + c * vj
+        end
+    end
+    @inbounds r[i] = rii
+    r
 end
 
 function calc_kalman_gain_and_posterior_covariance(
@@ -240,6 +290,7 @@ end
 function calc_kalman_gain_and_posterior_covariance!(
     U,
     P_post,
+    downdate_temp,
     P::Cholesky,
     Pᵪᵧ,
     S::Cholesky,
@@ -256,7 +307,7 @@ function calc_kalman_gain_and_posterior_covariance!(
     end
     P_post .= P.factors
     P_chol = Cholesky(P_post, P.uplo, P.info)
-    lowrankdowndate_columns!(P_chol, U)
+    lowrankdowndate_columns!(P_chol, U, downdate_temp)
     K, P_chol
 end
 
@@ -272,11 +323,12 @@ end
 function calc_kalman_gain_and_posterior_covariance!(
     U,
     P_post,
+    downdate_temp,
     P::Augmented{<:Cholesky},
     Pᵪᵧ,
     S::Cholesky,
 )
-    calc_kalman_gain_and_posterior_covariance!(U, P_post, P.P, Pᵪᵧ, S)
+    calc_kalman_gain_and_posterior_covariance!(U, P_post, downdate_temp, P.P, Pᵪᵧ, S)
 end
 
 function time_update!(
@@ -330,6 +382,7 @@ function measurement_update!(
     K, P_posterior = calc_kalman_gain_and_posterior_covariance!(
         mu.kalman_gain,
         mu.p_posterior,
+        mu.downdate_temp,
         P,
         Pᵪᵧ,
         S,

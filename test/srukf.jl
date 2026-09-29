@@ -1,4 +1,55 @@
 @testset "Square root Unscented Kalman filter" begin
+    # Sizes on both sides of the threshold at which the blocked LAPACK kernels take over
+    @testset "Upper triangular of QR with $T, $num_dense_rows × $n dense rows" for T in (
+            Float64,
+            Float32,
+            ComplexF64,
+            ComplexF32,
+        ),
+        (num_dense_rows, n) in ((2, 1), (10, 5), (20, 10), (80, 40), (140, 70))
+
+        U = triu(randn(T, n, n))
+        A = [randn(T, num_dense_rows, n); U]
+        A_dense = randn(T, num_dense_rows + n, n)
+        workspace_length = @inferred KalmanFilters.calc_qr_workspace_length(A)
+        tau = zeros(T, workspace_length)
+        work = zeros(T, workspace_length)
+        native_stacked!(R, A, tau, work) =
+            KalmanFilters.householder_upper_triangular!(R, A, num_dense_rows)
+        native_dense!(R, A, tau, work) =
+            KalmanFilters.householder_upper_triangular!(R, A, size(A, 1))
+        for (qr!, B) in (
+            (KalmanFilters.calc_upper_triangular_of_stacked_qr_inplace!, A),
+            (native_stacked!, A),
+            (KalmanFilters.mytpqrt!, A),
+            (KalmanFilters.calc_upper_triangular_of_dense_qr_inplace!, A_dense),
+            (native_dense!, A_dense),
+            (KalmanFilters.mygeqrt!, A_dense),
+        )
+            R = zeros(T, n, n)
+            @test qr!(R, copy(B), tau, work) === R
+            @test istriu(R)
+            @test abs.(R) ≈ abs.(qr(B).R)
+            @test R' * R ≈ B' * B
+        end
+        @test_throws DimensionMismatch KalmanFilters.mytpqrt!(
+            zeros(T, n, n),
+            copy(A),
+            zeros(T, n - 1),
+            work,
+        )
+    end
+
+    @testset "Native upper triangular of QR with entries of magnitude $scale" for scale in (
+        1e-170,
+        1e170,
+    )
+        A = scale .* [randn(6, 3); triu(randn(3, 3))]
+        R = KalmanFilters.householder_upper_triangular!(zeros(3, 3), copy(A), 6)
+        @test all(isfinite, R)
+        @test abs.(R) ≈ abs.(qr(A).R)
+    end
+
     @testset "Rank-k Cholesky downdate with $T, uplo $uplo" for T in (Float64, ComplexF64),
         uplo in (:U, :L)
 
@@ -136,5 +187,57 @@
         mu_chol = @inferred measurement_update(x, P_chol, y, h, R_chol)
         @test @inferred(get_covariance(mu_chol)) ≈ get_covariance(mu)
         @test @inferred(get_state(mu_chol)) ≈ get_state(mu)
+    end
+
+    # Large enough for the blocked QR kernels (`tpqrt`/`geqrt`) to be used
+    @testset "Updates with $num_x states and $num_y measurements with $T" for T in (
+            Float64,
+            ComplexF64,
+        ),
+        (num_x, num_y) in ((40, 36), (70, 8))
+
+        random_pos_def(n) = (A = randn(T, n, n); Hermitian(A'A + n * I))
+        x = randn(T, num_x)
+        P = random_pos_def(num_x)
+        Q = random_pos_def(num_x)
+        R = random_pos_def(num_y)
+        y = randn(T, num_y)
+        F = randn(T, num_x, num_x)
+        H = randn(T, num_y, num_x)
+        f(x) = F * x
+        f(x, noise) = F * x .+ noise
+        f!(y, x) = mul!(y, F, x)
+        f!(y, x, noise) = (mul!(y, F, x); y .+= noise)
+        h(x) = H * x
+        h(x, noise) = H * x .+ noise
+        h!(y, x) = mul!(y, H, x)
+        h!(y, x, noise) = (mul!(y, H, x); y .+= noise)
+
+        tu = time_update(x, Matrix(P), F, Matrix(Q))
+        mu = measurement_update(x, Matrix(P), y, H, Matrix(R))
+        for (TU, MU, noise) in (
+            (SRUKFTUIntermediate, SRUKFMUIntermediate, identity),
+            (SRAUKFTUIntermediate, SRAUKFMUIntermediate, Augment),
+        )
+            tu_alloc = time_update(x, cholesky(P), f, noise(cholesky(Q)))
+            @test get_covariance(tu_alloc) ≈ get_covariance(tu)
+            @test get_state(tu_alloc) ≈ get_state(tu)
+            mu_alloc = measurement_update(x, cholesky(P), y, h, noise(cholesky(R)))
+            @test get_covariance(mu_alloc) ≈ get_covariance(mu)
+            @test get_state(mu_alloc) ≈ get_state(mu)
+            tu_inplace = time_update!(TU(T, num_x), x, cholesky(P), f!, noise(cholesky(Q)))
+            @test get_covariance(tu_inplace) ≈ get_covariance(tu)
+            @test get_state(tu_inplace) ≈ get_state(tu)
+            mu_inplace = measurement_update!(
+                MU(T, num_x, num_y),
+                x,
+                cholesky(P),
+                y,
+                h!,
+                noise(cholesky(R)),
+            )
+            @test get_covariance(mu_inplace) ≈ get_covariance(mu)
+            @test get_state(mu_inplace) ≈ get_state(mu)
+        end
     end
 end

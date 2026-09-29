@@ -1,8 +1,8 @@
 function SRAUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
     xi_temp = Vector{T}(undef, num_x)
-    qr_tau = zeros(T, num_x)
     qr_A = Matrix{T}(undef, 4 * num_x, num_x)
-    qr_space_length = calc_geqrf_working_size(qr_A)
+    qr_tau = zeros(T, calc_qr_workspace_length(qr_A))
+    qr_space_length = calc_qr_workspace_length(qr_A)
     SRUKFTUIntermediate(
         Augmented(Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_x, num_x)),
         Augmented(xi_temp, xi_temp),
@@ -28,9 +28,9 @@ end
 SRAUKFTUIntermediate(num_x::Number) = SRAUKFTUIntermediate(Float64, num_x)
 
 function SRAUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
-    qr_tau = zeros(T, num_y)
     qr_A = Matrix{T}(undef, 2 * num_x + 2 * num_y, num_y)
-    qr_space_length = calc_geqrf_working_size(qr_A)
+    qr_tau = zeros(T, calc_qr_workspace_length(qr_A))
+    qr_space_length = calc_qr_workspace_length(qr_A)
     SRUKFMUIntermediate(
         Augmented(Matrix{T}(undef, num_x, num_x), Matrix{T}(undef, num_y, num_y)),
         Augmented(Vector{T}(undef, num_x), Vector{T}(undef, num_y)),
@@ -55,6 +55,7 @@ function SRAUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
         Matrix{T}(undef, num_x, num_y),
         Vector{T}(undef, num_x),
         Matrix{T}(undef, num_x, num_x),
+        Vector{T}(undef, num_x),
     )
 end
 
