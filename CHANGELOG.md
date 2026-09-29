@@ -1,5 +1,20 @@
 # Changelog
 
+# [2.0.0](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v1.0.0...v2.0.0) (2026-09-29)
+
+
+* feat!: write the in-place updates into x and P ([fccefea](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/fccefea5f172c95f21627a8bc60a90d0f275058a))
+
+
+### BREAKING CHANGES
+
+* the in-place `time_update!` and `measurement_update!` now
+overwrite `x` and `P` (for a `Cholesky`, its stored factor). Pass copies to
+keep the prior, and pass mutable containers: a `Vector` state and a `Matrix`
+or `Cholesky` covariance, not StaticArrays. The intermediates' fields changed.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+
 # [1.0.0](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v0.1.11...v1.0.0) (2026-09-29)
 
 
