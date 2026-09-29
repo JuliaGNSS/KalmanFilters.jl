@@ -1,4 +1,4 @@
-using BenchmarkTools, LinearAlgebra, KalmanFilters, Plots, LazyArrays, Colors
+using BenchmarkTools, LinearAlgebra, KalmanFilters, Plots, Colors
 
 function init_mu(num_states, num_measures)
     x = randn(num_states)
@@ -13,7 +13,7 @@ function init_mu(num_states, num_measures)
     h(x) = H * x
     h!(y, x) = mul!(y, H, x)
     h(x, noise) = H * x .+ noise
-    h!(y, x, noise) = y .= @~ H * x .+ noise
+    h!(y, x, noise) = (mul!(y, H, x); y .+= noise)
     return x, y, P, H, R, P_chol, R_chol, h, h!
 end
 
@@ -29,7 +29,7 @@ function init_tu(num_states)
     f(x) = F * x
     f!(y, x) = mul!(y, F, x)
     f(x, noise) = F * x .+ noise
-    f!(y, x, noise) = y .= @~ F * x .+ noise
+    f!(y, x, noise) = (mul!(y, F, x); y .+= noise)
     return x, P, Q, F, P_chol, Q_chol, f, f!
 end
 
