@@ -20,7 +20,6 @@ function SRAUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
         qr_tau,
         Vector{T}(undef, qr_space_length),
         qr_A,
-        Vector{T}(undef, num_x),
         Matrix{T}(undef, num_x, num_x),
     )
 end
@@ -53,8 +52,6 @@ function SRAUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
         Matrix{T}(undef, num_y, num_y),
         Matrix{T}(undef, num_x, num_y),
         Matrix{T}(undef, num_x, num_y),
-        Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x),
         Vector{T}(undef, num_x),
     )
 end

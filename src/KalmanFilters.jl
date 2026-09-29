@@ -92,6 +92,10 @@ function get_sqrt_innovation_covariance(
     kf.innovation_covariance
 end
 
+# The covariance a caller handed to an in-place update, which it is written back into:
+# `P` itself, or the state block of an `Augmented` one.
+caller_covariance(P) = P
+
 @static if VERSION < v"1.1"
     eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
 end

@@ -7,7 +7,7 @@ struct SRUKFTUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
     qr_tau::Vector{T}
     qr_space::Vector{T}
     qr_A::Matrix{T}
-    x_apri::Vector{T}
+    # Scratch for the new upper factor when `P` stores its lower one
     p_apri::Matrix{T}
 end
 
@@ -33,7 +33,6 @@ function SRUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
         qr_tau,
         Vector{T}(undef, qr_space_length),
         qr_A,
-        Vector{T}(undef, num_x),
         Matrix{T}(undef, num_x, num_x),
     )
 end
@@ -54,8 +53,6 @@ struct SRUKFMUIntermediate{T,X,TS,AS<:Union{Matrix{T},Augmented{Matrix{T},Matrix
     innovation_covariance::Matrix{T}
     cross_covariance::Matrix{T}
     kalman_gain::Matrix{T}
-    x_posterior::Vector{T}
-    p_posterior::Matrix{T}
     downdate_temp::Vector{T}
 end
 
@@ -85,8 +82,6 @@ function SRUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
         Matrix{T}(undef, num_y, num_y),
         Matrix{T}(undef, num_x, num_y),
         Matrix{T}(undef, num_x, num_y),
-        Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x),
         Vector{T}(undef, num_x),
     )
 end
@@ -263,9 +258,9 @@ function calc_kalman_gain_and_posterior_covariance(
     K, P_post
 end
 
+# Downdates `P` in place to the posterior factor and returns the gain with it.
 function calc_kalman_gain_and_posterior_covariance!(
     U,
-    P_post,
     downdate_temp,
     P::Cholesky,
     Pᵪᵧ,
@@ -281,10 +276,8 @@ function calc_kalman_gain_and_posterior_covariance!(
         U .= rdiv!(Pᵪᵧ, S_L')
         K = rdiv!(Pᵪᵧ, S_L)
     end
-    P_post .= P.factors
-    P_chol = Cholesky(P_post, P.uplo, P.info)
-    lowrankdowndate_columns!(P_chol, U, downdate_temp)
-    K, P_chol
+    lowrankdowndate_columns!(P, U, downdate_temp)
+    K, P
 end
 
 function calc_kalman_gain_and_posterior_covariance(
@@ -296,17 +289,6 @@ function calc_kalman_gain_and_posterior_covariance(
     calc_kalman_gain_and_posterior_covariance(P.P, Pᵪᵧ, S, consider)
 end
 
-function calc_kalman_gain_and_posterior_covariance!(
-    U,
-    P_post,
-    downdate_temp,
-    P::Augmented{<:Cholesky},
-    Pᵪᵧ,
-    S::Cholesky,
-)
-    calc_kalman_gain_and_posterior_covariance!(U, P_post, downdate_temp, P.P, Pᵪᵧ, S)
-end
-
 function time_update!(
     tu::SRUKFTUIntermediate,
     x,
@@ -315,12 +297,16 @@ function time_update!(
     Q;
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
 ) where {F}
+    # The sigma points are drawn from `x` and `P` (copied into the intermediate) before
+    # either is written, so the a priori mean lands directly in `x`, and the new upper
+    # factor in `P`'s own factor where it stores the upper one.
     χₖ₋₁ = calc_sigma_points!(tu.P_chol, x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform!(tu.transformed_sigma_points, tu.xi_temp, f!, χₖ₋₁)
-    x_apri = mean!(tu.x_apri, χₖ₍ₖ₋₁₎)
+    x_apri = mean!(x, χₖ₍ₖ₋₁₎)
     unbiased_χₖ₍ₖ₋₁₎ = substract_mean!(tu.unbiased_sigma_points, χₖ₍ₖ₋₁₎, x_apri)
-    P_apri = cov!(
-        tu.p_apri,
+    P_own = caller_covariance(P)
+    R = cov!(
+        upper_factor_target(P_own, tu.p_apri),
         tu.qr_A,
         tu.qr_tau,
         tu.qr_space,
@@ -328,7 +314,8 @@ function time_update!(
         unbiased_χₖ₍ₖ₋₁₎,
         Q,
     )
-    SPTimeUpdate(x_apri, P_apri, χₖ₍ₖ₋₁₎)
+    store_upper_factor!(P_own, R.factors)
+    SPTimeUpdate(x_apri, P_own, χₖ₍ₖ₋₁₎)
 end
 
 function measurement_update!(
@@ -357,12 +344,11 @@ function measurement_update!(
     Pᵪᵧ = cov!(mu.cross_covariance, χₖ₍ₖ₋₁₎, unbiased_𝓨)
     K, P_posterior = calc_kalman_gain_and_posterior_covariance!(
         mu.kalman_gain,
-        mu.p_posterior,
         mu.downdate_temp,
-        P,
+        caller_covariance(P),
         Pᵪᵧ,
         S,
     )
-    x_posterior = calc_posterior_state!(mu.x_posterior, x, K, mu.ỹ)
+    x_posterior = calc_posterior_state!(x, K, mu.ỹ)
     SPMeasurementUpdate(x_posterior, P_posterior, 𝓨, mu.ỹ, S, K)
 end

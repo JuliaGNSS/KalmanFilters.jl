@@ -13,6 +13,8 @@ Augmented(P, B::Augment{<:Number}) = Augmented(P, reshape([B.noise], 1, 1))
 Base.size(A::Augmented) = (size(A.P, 1), size(A.P, 2) + size(A.noise, 2))
 Base.size(A::Augmented, d::Integer) = size(A)[d]
 
+caller_covariance(P::Augmented) = P.P
+
 struct AugmentedSigmaPoints{
     T,
     V<:AbstractVector{T},

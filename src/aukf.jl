@@ -13,8 +13,6 @@ function AUKFTUIntermediate(::Type{T}, num_x::Number) where {T}
             Matrix{T}(undef, num_x, 4 * num_x),
             MeanSetWeightingParameters(0.0),
         ),
-        Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x),
     )
 end
 
@@ -40,8 +38,6 @@ function AUKFMUIntermediate(::Type{T}, num_x::Number, num_y::Number) where {T}
         Matrix{T}(undef, num_x, num_y),
         Matrix{T}(undef, num_y, num_y),
         Matrix{T}(undef, num_x, num_y),
-        Vector{T}(undef, num_x),
-        Matrix{T}(undef, num_x, num_x),
     )
 end
 
@@ -50,19 +46,6 @@ AUKFMUIntermediate(num_x::Number, num_y::Number) = AUKFMUIntermediate(Float64, n
 function calc_kalman_gain_and_posterior_covariance(P::Augmented, Pᵪᵧ, S, consider)
     K = calc_kalman_gain(Pᵪᵧ, S, consider)
     P_posterior = calc_posterior_covariance(P.P, Pᵪᵧ, K, consider)
-    K, P_posterior
-end
-
-function calc_kalman_gain_and_posterior_covariance!(
-    s_chol,
-    kalman_gain,
-    p_post,
-    P::Augmented,
-    Pᵪᵧ,
-    S,
-)
-    K = calc_kalman_gain!(s_chol, kalman_gain, Pᵪᵧ, S)
-    P_posterior = calc_posterior_covariance!(p_post, P.P, Pᵪᵧ, K)
     K, P_posterior
 end
 

@@ -26,6 +26,9 @@ const SECONDS = 0.25
 # (number of states, number of measurements)
 const SIZES = ((2, 2), (10, 4), (50, 16))
 
+# The in-place updates write into `x` and `P`, so every sample of theirs starts from a
+# fresh copy of the prior, made in the untimed `setup`, and runs once (`evals = 1`).
+
 random_pos_def(n) = (A = randn(n, n); A'A + n * I)
 
 size_label(num_states) = "$num_states states"
@@ -75,61 +78,61 @@ for (num_states, _) in SIZES
         @benchmarkable time_update($x, $P, $F, $Q) seconds = SECONDS
     tu["KF"][label]["inplace"] = @benchmarkable time_update!(
         $(KFTUIntermediate(num_states)),
-        $x,
-        $P,
+        x,
+        P,
         $F,
         $Q,
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
 
     tu["SRKF"][label]["allocating"] =
         @benchmarkable time_update($x, $P_chol, $F, $Q_chol) seconds = SECONDS
     tu["SRKF"][label]["inplace"] = @benchmarkable time_update!(
         $(SRKFTUIntermediate(num_states)),
-        $x,
-        $P_chol,
+        x,
+        P_chol,
         $F,
         $Q_chol,
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P_chol = copy($P_chol)) evals = 1 seconds = SECONDS
 
     tu["UKF"][label]["allocating"] =
         @benchmarkable time_update($x, $P, $f, $Q) seconds = SECONDS
     tu["UKF"][label]["inplace"] = @benchmarkable time_update!(
         $(UKFTUIntermediate(num_states)),
-        $x,
-        $P,
+        x,
+        P,
         $f!,
         $Q,
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
 
     tu["SRUKF"][label]["allocating"] =
         @benchmarkable time_update($x, $P_chol, $f, $Q_chol) seconds = SECONDS
     tu["SRUKF"][label]["inplace"] = @benchmarkable time_update!(
         $(SRUKFTUIntermediate(num_states)),
-        $x,
-        $P_chol,
+        x,
+        P_chol,
         $f!,
         $Q_chol,
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P_chol = copy($P_chol)) evals = 1 seconds = SECONDS
 
     tu["AUKF"][label]["allocating"] =
         @benchmarkable time_update($x, $P, $f, $(Augment(Q))) seconds = SECONDS
     tu["AUKF"][label]["inplace"] = @benchmarkable time_update!(
         $(AUKFTUIntermediate(num_states)),
-        $x,
-        $P,
+        x,
+        P,
         $f!,
         $(Augment(Q)),
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
 
     tu["SRAUKF"][label]["allocating"] =
         @benchmarkable time_update($x, $P_chol, $f, $(Augment(Q_chol))) seconds = SECONDS
     tu["SRAUKF"][label]["inplace"] = @benchmarkable time_update!(
         $(SRAUKFTUIntermediate(num_states)),
-        $x,
-        $P_chol,
+        x,
+        P_chol,
         $f!,
         $(Augment(Q_chol)),
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P_chol = copy($P_chol)) evals = 1 seconds = SECONDS
 
     tu["EKF"][label]["allocating"] = @benchmarkable time_update(
         $x,
@@ -155,56 +158,56 @@ for (num_states, num_measures) in SIZES
         @benchmarkable measurement_update($x, $P, $y, $H, $R) seconds = SECONDS
     mu["KF"][label]["inplace"] = @benchmarkable measurement_update!(
         $(KFMUIntermediate(num_states, num_measures)),
-        $x,
-        $P,
+        x,
+        P,
         $y,
         $H,
         $R,
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
 
     mu["SRKF"][label]["allocating"] =
         @benchmarkable measurement_update($x, $P_chol, $y, $H, $R_chol) seconds = SECONDS
     mu["SRKF"][label]["inplace"] = @benchmarkable measurement_update!(
         $(SRKFMUIntermediate(num_states, num_measures)),
-        $x,
-        $P_chol,
+        x,
+        P_chol,
         $y,
         $H,
         $R_chol,
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P_chol = copy($P_chol)) evals = 1 seconds = SECONDS
 
     mu["UKF"][label]["allocating"] =
         @benchmarkable measurement_update($x, $P, $y, $h, $R) seconds = SECONDS
     mu["UKF"][label]["inplace"] = @benchmarkable measurement_update!(
         $(UKFMUIntermediate(num_states, num_measures)),
-        $x,
-        $P,
+        x,
+        P,
         $y,
         $h!,
         $R,
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
 
     mu["SRUKF"][label]["allocating"] =
         @benchmarkable measurement_update($x, $P_chol, $y, $h, $R_chol) seconds = SECONDS
     mu["SRUKF"][label]["inplace"] = @benchmarkable measurement_update!(
         $(SRUKFMUIntermediate(num_states, num_measures)),
-        $x,
-        $P_chol,
+        x,
+        P_chol,
         $y,
         $h!,
         $R_chol,
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P_chol = copy($P_chol)) evals = 1 seconds = SECONDS
 
     mu["AUKF"][label]["allocating"] =
         @benchmarkable measurement_update($x, $P, $y, $h, $(Augment(R))) seconds = SECONDS
     mu["AUKF"][label]["inplace"] = @benchmarkable measurement_update!(
         $(AUKFMUIntermediate(num_states, num_measures)),
-        $x,
-        $P,
+        x,
+        P,
         $y,
         $h!,
         $(Augment(R)),
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
 
     mu["SRAUKF"][label]["allocating"] = @benchmarkable measurement_update(
         $x,
@@ -215,12 +218,12 @@ for (num_states, num_measures) in SIZES
     ) seconds = SECONDS
     mu["SRAUKF"][label]["inplace"] = @benchmarkable measurement_update!(
         $(SRAUKFMUIntermediate(num_states, num_measures)),
-        $x,
-        $P_chol,
+        x,
+        P_chol,
         $y,
         $h!,
         $(Augment(R_chol)),
-    ) seconds = SECONDS
+    ) setup = (x = copy($x); P_chol = copy($P_chol)) evals = 1 seconds = SECONDS
 
     mu["EKF"][label]["allocating"] = @benchmarkable measurement_update(
         $x,

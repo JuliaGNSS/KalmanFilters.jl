@@ -119,15 +119,22 @@
 
         if x isa Vector
             mu_interm = SRKFMUIntermediate(T, 3, 3)
-            mu_chol_inplace =
-                @inferred measurement_update!(mu_interm, x, P_chol, y, H, R_chol)
+            mu_chol_inplace = @inferred measurement_update!(
+                mu_interm,
+                copy(x),
+                copy(P_chol),
+                y,
+                H,
+                R_chol,
+            )
             @test @inferred(get_covariance(mu_chol_inplace)) ≈ get_covariance(mu)
             @test @inferred(get_state(mu_chol_inplace)) ≈ get_state(mu)
 
             # A reused buffer holds the previous call's QR factors, and a fresh one
             # whatever memory it was handed; neither may leak into the update.
             fill!(mu_interm.m, 7)
-            mu_chol_reused = measurement_update!(mu_interm, x, P_chol, y, H, R_chol)
+            mu_chol_reused =
+                measurement_update!(mu_interm, copy(x), copy(P_chol), y, H, R_chol)
             @test get_covariance(mu_chol_reused) ≈ get_covariance(mu)
             @test get_state(mu_chol_reused) ≈ get_state(mu)
         end
@@ -170,8 +177,13 @@
 
         tu = time_update(x, Matrix(P), F, Matrix(Q))
         tu_alloc = time_update(x, cholesky(P), F, cholesky(Q))
-        tu_inplace =
-            time_update!(SRKFTUIntermediate(T, num_x), x, cholesky(P), F, cholesky(Q))
+        tu_inplace = time_update!(
+            SRKFTUIntermediate(T, num_x),
+            copy(x),
+            cholesky(P),
+            F,
+            cholesky(Q),
+        )
         for tu_chol in (tu_alloc, tu_inplace)
             @test get_covariance(tu_chol) ≈ get_covariance(tu)
             @test get_state(tu_chol) ≈ get_state(tu)
@@ -181,7 +193,7 @@
         mu_alloc = measurement_update(x, cholesky(P), y, H, cholesky(R))
         mu_inplace = measurement_update!(
             SRKFMUIntermediate(T, num_x, num_y),
-            x,
+            copy(x),
             cholesky(P),
             y,
             H,

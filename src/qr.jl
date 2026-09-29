@@ -319,3 +319,18 @@ function copy_upper_factor!(dest, C::Cholesky)
     end
     dest
 end
+
+# The matrix an in-place square-root update writes its new upper factor into: `P`'s own
+# factor when `P` stores the upper one, `scratch` otherwise (see `store_upper_factor!`).
+upper_factor_target(P::Cholesky, scratch) = P.uplo === 'U' ? P.factors : scratch
+
+# Stores the upper factor `R` in `P`: nothing to do when `R` already is `P`'s factor, a
+# copy when `P` stores the upper factor elsewhere, the adjoint when it stores the lower.
+function store_upper_factor!(P::Cholesky, R)
+    if P.uplo === 'U'
+        R === P.factors || copyto!(P.factors, R)
+    else
+        adjoint!(P.factors, R)
+    end
+    P
+end

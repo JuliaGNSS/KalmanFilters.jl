@@ -44,12 +44,14 @@
         @test get_covariance(mu_aug) ≈ get_covariance(mu)
         @test get_state(mu_aug) ≈ get_state(mu)
 
-        h!(y, x) = mul!(y, H, x)
-        h!(y, x, noise) = y .= @~ H * x .+ noise
-        mu_inter = AUKFMUIntermediate(T, 3, 3)
-        mu_ukf_inplace = measurement_update!(mu_inter, x, P, y, h!, Augment(R))
-        @test get_covariance(mu_ukf_inplace) ≈ get_covariance(mu)
-        @test get_state(mu_ukf_inplace) ≈ get_state(mu)
+        if x isa Vector
+            h!(y, x) = mul!(y, H, x)
+            h!(y, x, noise) = y .= @~ H * x .+ noise
+            mu_inter = AUKFMUIntermediate(T, 3, 3)
+            mu_ukf_inplace = measurement_update!(mu_inter, x, P, y, h!, Augment(R))
+            @test get_covariance(mu_ukf_inplace) ≈ get_covariance(mu)
+            @test get_state(mu_ukf_inplace) ≈ get_state(mu)
+        end
     end
 
     @testset "Scalar measurement update with $T type $t" for T in (Float64, ComplexF64),
