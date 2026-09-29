@@ -96,7 +96,7 @@ end
     eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
 end
 
-include("geqrf.jl")
+include("qr.jl")
 include("kf.jl")
 include("srkf.jl")
 include("ekf.jl")
