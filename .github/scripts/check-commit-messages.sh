@@ -10,6 +10,9 @@
 #   - That section is built only from `BREAKING CHANGE:` footers; `BREAKING:`
 #     and friends are ignored.
 # So a `!` commit is fine as long as it also carries a `BREAKING CHANGE:` footer.
+# Separately, the conventionalcommits parser takes any line that starts with the
+# keyword, in any case and followed by ':' or a space, as a breaking-change note,
+# so wrapped prose can bump the major version by accident.
 # Release notes without a breaking-change section block the General registry's
 # AutoMerge for a breaking release (see JuliaRegistries/General#169671).
 #
@@ -31,10 +34,21 @@ for sha in $commits; do
         status=1
     fi
 
-    # Any footer that looks like a breaking-change note but is not spelled
-    # exactly `BREAKING CHANGE:` is silently ignored by one of the parsers.
     while IFS= read -r line; do
-        if [[ ($line =~ ^[[:space:]]*BREAKING || ${line,,} =~ ^[[:space:]]*breaking[\ -]changes?[[:space:]]*:) && ! $line =~ ^BREAKING\ CHANGE:\  ]]; then
+        [[ $line =~ ^BREAKING\ CHANGE:\  ]] && continue
+        lower=${line,,}
+        # The conventionalcommits parser takes any line that starts with the
+        # keyword, in any case and followed by ':' or whitespace, as a
+        # breaking-change note, and bumps the major version. Wrapped prose
+        # such as "breaking-change section and ..." is enough.
+        if [[ $lower =~ ^[[:space:]|*]*breaking[\ -]change[:[:space:]] ]]; then
+            echo "::error::$short \"$subject\": line '${line:0:40}' is read as a breaking-change note and would bump the major version." \
+                "Reword it so no line starts with 'breaking change'; for a breaking change, write 'BREAKING CHANGE: <description>'."
+            status=1
+        # Any other footer that looks like a breaking-change note but is not
+        # spelled exactly `BREAKING CHANGE:` is silently ignored by one of the
+        # parsers.
+        elif [[ $line =~ ^[[:space:]]*BREAKING || $lower =~ ^[[:space:]]*breaking[\ -]changes?[[:space:]]*: ]]; then
             echo "::error::$short \"$subject\": footer '${line:0:40}' is not recognised." \
                 "Write it as 'BREAKING CHANGE: <description>'."
             status=1
