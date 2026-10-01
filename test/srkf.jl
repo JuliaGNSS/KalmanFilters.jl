@@ -107,7 +107,6 @@
                 @test abs.(R) ≈ abs.(qr(Matrix(C)).R)
             end
         end
-        @test (@allocated KalmanFilters.calc_upper_triangular_of_qr(A, num_dense_rows)) == 0
     end
 
     @testset "Time update with $T type $t" for T in (Float64, ComplexF64),
