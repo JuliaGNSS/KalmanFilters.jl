@@ -206,8 +206,9 @@ TransformedSigmaPoints(
     W<:AbstractWeightingParameters,
 } = TransformedSigmaPoints{T,V,M,W}(x0, xi, weight_params)
 
-function transform(F, χ::SigmaPoints{T}) where {T}
-    𝓨_x0 = to_vec(F(χ.x0))
+transform(F::G, χ::SigmaPoints) where {G} = transform_sigma_points(F, χ, to_vec(F(χ.x0)))
+
+function transform_sigma_points(F::G, χ::SigmaPoints{T}, 𝓨_x0) where {T,G}
     num_x = length(χ.x0)
     𝓨_xi = Matrix{T}(undef, length(𝓨_x0), 2 * length(χ.x0))
     xi_temp = Vector(copy(χ.x0))
@@ -299,6 +300,50 @@ function cov!(P, χ::SigmaPoints, unbiased_𝓨::TransformedSigmaPoints)
             (@view(unbiased_𝓨.xi[:, (num_states+1):(2*num_states)]))'
         )
     lmul!(χ.P_chol, P)
+end
+
+# StaticArrays: sigma points of an `SVector` and the Cholesky factor of an `SMatrix` are
+# transformed into `SMatrix` sigma points, so that the whole update stays on the stack. A
+# model that doesn't return an `SVector` (or a number) gets the regular sigma points.
+const StaticSigmaPoints{T,N} =
+    SigmaPoints{T,<:SVector{N,T},<:LowerTriangular{T,<:SMatrix{N,N,T}}}
+const StaticTransformedSigmaPoints{T} = TransformedSigmaPoints{T,<:SVector,<:SMatrix}
+
+transform(F::G, χ::StaticSigmaPoints) where {G} = transform_sigma_points(F, χ, F(χ.x0))
+
+transform_sigma_points(F::G, χ::StaticSigmaPoints, 𝓨_x0::Number) where {G} =
+    transform_sigma_points(x -> SVector(F(x)), χ, SVector(𝓨_x0))
+
+function transform_sigma_points(
+    F::G,
+    χ::StaticSigmaPoints{T,N},
+    𝓨_x0::SVector,
+) where {T,N,G}
+    # Dense, with the zeros above the diagonal
+    L = SMatrix{N,N,T}(χ.P_chol)
+    𝓨_plus = ntuple(i -> F(χ.x0 + L[:, i]), Val(N))
+    𝓨_minus = ntuple(i -> F(χ.x0 - L[:, i]), Val(N))
+    TransformedSigmaPoints(𝓨_x0, hcat(𝓨_plus..., 𝓨_minus...), χ.weight_params)
+end
+
+function mean(𝓨::StaticTransformedSigmaPoints)
+    weight_0, weight_i = calc_mean_weights(𝓨)
+    𝓨.x0 * weight_0 + vec(sum(𝓨.xi; dims = Val(2))) * weight_i
+end
+
+substract_mean(𝓨::StaticTransformedSigmaPoints, y) =
+    TransformedSigmaPoints(𝓨.x0 - y, 𝓨.xi .- y, 𝓨.weight_params)
+
+cov(unbiased_𝓨::StaticTransformedSigmaPoints, Q::Number) = cov(unbiased_𝓨, SMatrix{1,1}(Q))
+
+function cov(
+    χ::StaticSigmaPoints{T,N},
+    unbiased_𝓨::StaticTransformedSigmaPoints,
+) where {T,N}
+    weight_0, weight_i = calc_cov_weights(χ)
+    𝓨_plus = unbiased_𝓨.xi[:, SOneTo(N)]
+    𝓨_minus = unbiased_𝓨.xi[:, SVector(ntuple(i -> N + i, Val(N)))]
+    SMatrix{N,N,T}(χ.P_chol) * (𝓨_plus - 𝓨_minus)' * weight_i
 end
 
 function mean_and_cov(𝓨::TransformedSigmaPoints, Q)

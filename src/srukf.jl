@@ -103,6 +103,77 @@ function cov(χ::TransformedSigmaPoints, noise::Cholesky)
     P
 end
 
+# StaticArrays: static sigma points give a static factor. A regular noise factor, e.g. the
+# 1 x 1 one of `cholesky(r::Number)`, is converted to the static size of the sigma points.
+function cov(χ::StaticTransformedSigmaPoints, noise::Cholesky)
+    num_y = Size(χ.xi)[1]
+    cov(χ, Cholesky(SMatrix{num_y,num_y}(noise.factors), noise.uplo, noise.info))
+end
+
+function cov(χ::StaticTransformedSigmaPoints, noise::Cholesky{<:Any,<:SMatrix})
+    weight_0, weight_i = calc_cov_weights(χ.weight_params, (size(χ, 2) - 1) >> 1)
+    A = vcat(sqrt(weight_i) * χ.xi', static_upper_factor(noise))
+    # Skips the zeros of the triangular noise factor
+    R = correct_cholesky_sign(calc_upper_triangular_of_qr(A, size(χ.xi, 2)))
+    S = Cholesky(R, 'U', 0)
+    v = sqrt(abs(weight_0)) * χ.x0
+    weight_0 < 0 ? lowrankdowndate_columns(S, hcat(v)) : static_lowrankupdate(S, v)
+end
+
+# The upper factor of `C` including the zeros below the diagonal
+static_upper_factor(C::Cholesky{T,<:SMatrix{N,N}}) where {T,N} =
+    SMatrix{N,N,T}(UpperTriangular(C.uplo === 'U' ? C.factors : C.factors'))
+
+# StaticArrays: the rank-1 updates run on mutable copies. They don't escape, so that they
+# stay on the stack.
+function lowrankdowndate_columns(C::Cholesky{T,<:SMatrix{N,N}}, V::SMatrix{N}) where {T,N}
+    factors = MMatrix(C.factors)
+    @inline lowrankdowndate_columns!(
+        Cholesky(factors, C.uplo, C.info),
+        MMatrix(V),
+        MVector{N,T}(undef),
+    )
+    Cholesky(SMatrix(factors), C.uplo, C.info)
+end
+
+function static_lowrankupdate(C::Cholesky{T,<:SMatrix{N,N}}, v::SVector{N}) where {T,N}
+    factors = MMatrix(C.factors)
+    lowrankupdate_factor!(factors, C.uplo, MVector(v))
+    Cholesky(SMatrix(factors), C.uplo, C.info)
+end
+
+# `LinearAlgebra.lowrankupdate!` on the `factors` of a Cholesky decomposition, small enough
+# to be inlined (which the static update needs for its copies not to escape). The diagonal
+# of the factor is real and positive, so the Givens rotation that zeros `v[i]` is simply
+# c = A[i, i] / r and s = conj(v[i]) / r with r = √(A[i, i]² + |v[i]|²).
+@inline function lowrankupdate_factor!(A, uplo, v)
+    n = length(v)
+    if uplo === 'U'
+        @inbounds for j = 1:n
+            v[j] = conj(v[j])
+        end
+    end
+    @inbounds for i = 1:n
+        aii = real(A[i, i])
+        r = sqrt(abs2(aii) + abs2(v[i]))
+        c = aii / r
+        s = conj(v[i]) / r
+        A[i, i] = r
+        for j = (i+1):n
+            aij = uplo === 'U' ? A[i, j] : A[j, i]
+            vj = v[j]
+            aij_new = c * aij + s * vj
+            v[j] = -s' * aij + c * vj
+            if uplo === 'U'
+                A[i, j] = aij_new
+            else
+                A[j, i] = aij_new
+            end
+        end
+    end
+    A
+end
+
 function cov!(
     res,
     qr_A,
@@ -191,7 +262,10 @@ function lowrankdowndate_columns!(
     if C.uplo === 'U'
         length(temp) >= n ||
             throw(DimensionMismatch("temp has length $(length(temp)), but needs $n"))
-        conj!(V)
+        # A loop rather than `conj!`, which the static downdate couldn't inline
+        @inbounds for j in eachindex(V)
+            V[j] = conj(V[j])
+        end
         @inbounds for i = 1:n
             for j = i:n
                 temp[j] = A[i, j]
@@ -256,6 +330,18 @@ function calc_kalman_gain_and_posterior_covariance(
     P_post =
         lowrankdowndate_columns!(Cholesky(Matrix(P.factors), P.uplo, P.info), Matrix(U))
     K, P_post
+end
+
+function calc_kalman_gain_and_posterior_covariance(
+    P::Cholesky{<:Any,<:SMatrix},
+    Pᵪᵧ::SMatrix,
+    S::Cholesky{<:Any,<:SMatrix},
+    consider::Nothing,
+)
+    S_U = UpperTriangular(static_upper_factor(S))
+    U = Pᵪᵧ / S_U
+    K = U / S_U'
+    K, lowrankdowndate_columns(P, U)
 end
 
 # Downdates `P` in place to the posterior factor and returns the gain with it.

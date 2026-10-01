@@ -63,13 +63,15 @@ UKFMUIntermediate(num_x::Number, num_y::Number) = UKFMUIntermediate(Float64, num
 sigmapoints(tu::SPTimeUpdate) = tu.χ
 sigmapoints(tu::SPMeasurementUpdate) = tu.𝓨
 
+# The models are only passed on, so `::F ... where {F}` is needed for Julia to specialise
+# on them; without it every call of a closure model is dynamic and allocates.
 function time_update(
     x,
     P,
-    f,
+    f::F,
     Q,
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
-)
+) where {F}
     χₖ₋₁ = calc_sigma_points(x, P, weight_params)
     χₖ₍ₖ₋₁₎ = transform(f, χₖ₋₁)
     x_apri = mean(χₖ₍ₖ₋₁₎)
@@ -101,11 +103,11 @@ function measurement_update(
     x,
     P,
     y,
-    h,
+    h::F,
     R;
     weight_params::AbstractWeightingParameters = WanMerweWeightingParameters(),
     consider = nothing,
-)
+) where {F}
     χₖ₍ₖ₋₁₎ = calc_sigma_points(x, P, weight_params)
     𝓨 = transform(h, χₖ₍ₖ₋₁₎)
     y_est = mean(𝓨)
