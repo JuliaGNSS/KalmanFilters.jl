@@ -1,16 +1,22 @@
 ---
 name: Release
 
+# semantic-release only computes the next version and its notes (dry run). This
+# workflow writes them into Project.toml and CHANGELOG.md, pushes that commit
+# and asks JuliaRegistrator to register it. It neither tags nor creates a
+# GitHub release: TagBot does both once General has merged the registration,
+# which also makes that tag the base for the next version.
+#
+# Until then the version is pending. Later pushes compute the next version from
+# the same tag; if it comes out the same and the release notes changed, the
+# same version is registered again at the new commit, which updates the
+# pending registration instead of opening another one.
+
 on:
   push:
     branches:
       - master
 
-# Only one release run at a time. A run can block for a while below (waiting for the
-# previous version to land in General), and a second run must not register its version
-# in the meantime. Queued runs are not cancelled mid-flight; if several pushes queue up,
-# GitHub keeps only the newest pending run, which is fine because semantic-release picks
-# up all unreleased commits.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -24,42 +30,43 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Semantic Release
+      - name: Compute the next version
         uses: cycjimmy/semantic-release-action@v6
         id: semantic-release
         env:
           GH_TOKEN: ${{ secrets.PAT }}
           RUNNER_DEBUG: 1
         with:
+          dry_run: true
           branches: |
             ['+([0-9])?(.{+([0-9]),x}).x', 'master', 'main', 'next', 'next-major', {name: 'beta', prerelease: true}, {name: 'alpha', prerelease: true}]
           extends: |
             @ethima/semantic-release-configuration
           extra_plugins: |
             @ethima/semantic-release-configuration
-      # JuliaRegistrator can only register a version once the previous one is in the General
-      # registry, so wait for it before asking for the next registration.
-      - name: Wait for previous version to be registered
-        if: steps.semantic-release.outputs.new_release_published == 'true' && steps.semantic-release.outputs.last_release_version != ''
-        timeout-minutes: 180
+      - name: Write the version and the changelog
+        id: prepare
+        if: steps.semantic-release.outputs.new_release_published == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-          PREVIOUS_VERSION: ${{ steps.semantic-release.outputs.last_release_version }}
+          VERSION: ${{ steps.semantic-release.outputs.new_release_version }}
+          LAST_VERSION: ${{ steps.semantic-release.outputs.last_release_version }}
+          RELEASE_NOTES: ${{ steps.semantic-release.outputs.new_release_notes }}
+          PAT: ${{ secrets.PAT }}
         run: |
-          name=$(sed -n 's/^name = "\(.*\)"/\1/p' Project.toml)
-          path="${name:0:1}/${name}/Versions.toml"
-          echo "Waiting for ${name} v${PREVIOUS_VERSION} in JuliaRegistries/General (${path})"
-          until gh api "repos/JuliaRegistries/General/contents/${path}" --jq .content 2>/dev/null \
-              | base64 -d | grep -qF "[\"${PREVIOUS_VERSION}\"]"; do
-            echo "$(date -u +%T) v${PREVIOUS_VERSION} not registered yet, checking again in 60 s"
-            sleep 60
-          done
-          echo "v${PREVIOUS_VERSION} is registered"
+          result=$(.github/scripts/prepare-release.py "$VERSION" "$LAST_VERSION")
+          if [[ $result == changed ]]; then
+            git config user.name semantic-release-bot
+            git config user.email semantic-release-bot@martynus.net
+            git add Project.toml CHANGELOG.md
+            git commit -m "build(release): $VERSION" -m "$RELEASE_NOTES"
+            git push "https://x-access-token:${PAT}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
       - name: Notify JuliaRegistrator of new release
         uses: peter-evans/commit-comment@v4
-        if: steps.semantic-release.outputs.new_release_published == 'true'
+        if: steps.prepare.outputs.sha
         with:
-          sha: ${{ steps.semantic-release.outputs.new_release_git_head }}
+          sha: ${{ steps.prepare.outputs.sha }}
           body: |
             @JuliaRegistrator register
 
