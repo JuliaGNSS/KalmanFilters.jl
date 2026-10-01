@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v2.0.0...v2.0.1) (2026-10-01)
+
+
+### Performance Improvements
+
+* keep the UKF and SR-UKF on the stack with StaticArrays ([fb88878](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/fb888783a39767e9a5544bfdb7fa0dea2b4a7d98))
+
 # [2.0.0](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v1.0.0...v2.0.0) (2026-09-29)
 
 
