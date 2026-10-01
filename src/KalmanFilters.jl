@@ -16,7 +16,7 @@ import ..LinearAlgebra.BLAS.@blasfunc
 import ..LinearAlgebra:
     BlasFloat, BlasInt, DimensionMismatch, chkstride1, checksquare, cholesky
 
-import StaticArrays: SVector, SMatrix, SOneTo
+import StaticArrays: SVector, SMatrix, SOneTo, MVector, MMatrix, Size
 
 export WanMerweWeightingParameters,
     MeanSetWeightingParameters,

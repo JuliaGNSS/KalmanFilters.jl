@@ -254,6 +254,25 @@ function run_static_kf(x, P, F, Q, y, H, R, num_iterations)
     return x, P
 end
 
+# The models are passed on, so `::F ... where {F}` makes Julia specialise on them.
+function run_static_ukf(x, P, f::F, Q, y, h::H, R, num_iterations) where {F,H}
+    for _ = 1:num_iterations
+        tu = time_update(x, P, f, Q)
+        mu = measurement_update(get_state(tu), get_covariance(tu), y, h, R)
+        x, P = get_state(mu), get_covariance(mu)
+    end
+    return x, P
+end
+
+function run_static_srukf(x, P_chol, f::F, Q_chol, y, h::H, R_chol, num_iterations) where {F,H}
+    for _ = 1:num_iterations
+        tu = time_update(x, P_chol, f, Q_chol)
+        mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), y, h, R_chol)
+        x, P_chol = get_state(mu), get_sqrt_covariance(mu)
+    end
+    return x, P_chol
+end
+
 static = SUITE["StaticArrays"] = BenchmarkGroup()
 let Dx = 2, Dy = 2
     F = @SMatrix randn(Dx, Dx)
@@ -272,6 +291,20 @@ let Dx = 2, Dy = 2
         $(cholesky(Q)),
         $y,
         $H,
+        $(cholesky(R)),
+        100,
+    ) seconds = SECONDS
+    f(x) = F * x
+    h(x) = H * x
+    static["UKF 100 iterations"] =
+        @benchmarkable run_static_ukf($x, $P, $f, $Q, $y, $h, $R, 100) seconds = SECONDS
+    static["SRUKF 100 iterations"] = @benchmarkable run_static_srukf(
+        $x,
+        $(cholesky(P)),
+        $f,
+        $(cholesky(Q)),
+        $y,
+        $h,
         $(cholesky(R)),
         100,
     ) seconds = SECONDS

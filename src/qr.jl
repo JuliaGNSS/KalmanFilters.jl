@@ -165,6 +165,19 @@ function householder_upper_triangular!(
     A::AbstractMatrix{T},
     num_dense_rows::Integer,
 ) where {T<:Union{Real,Complex}}
+    householder_reduce!(A, num_dense_rows)
+    n = size(A, 2)
+    res .= @view(A[1:n, 1:n])
+    triu!(res)
+end
+
+# The reflections of `householder_upper_triangular!`, which leave `R` in the upper triangle
+# of `A`. Only loops, so that it can be inlined into the static QR, whose mutable copy then
+# doesn't escape.
+@inline function householder_reduce!(
+    A::AbstractMatrix{T},
+    num_dense_rows::Integer,
+) where {T<:Union{Real,Complex}}
     Base.require_one_based_indexing(A)
     m, n = size(A)
     m >= n || throw(DimensionMismatch("A must have at least as many rows as columns"))
@@ -181,9 +194,22 @@ function householder_upper_triangular!(
             is_reduced = iszero(σ)
         else
             # The squares under- or overflowed, compute the norm with scaling instead
-            x = view(A, k:last_row, k)
-            x_norm = norm(x)
-            is_reduced = all(iszero, view(x, 2:length(x)))
+            # (written out like `norm`, so that `householder_reduce!` is only loops)
+            x_max = abs(α)
+            is_reduced = true
+            for i = (k+1):last_row
+                x_max = max(x_max, abs(A[i, k]))
+                is_reduced &= iszero(A[i, k])
+            end
+            if iszero(x_max) || isinf(x_max)
+                x_norm = x_max
+            else
+                scaled_norm2 = abs2(α / x_max)
+                for i = (k+1):last_row
+                    scaled_norm2 += abs2(A[i, k] / x_max)
+                end
+                x_norm = x_max * sqrt(scaled_norm2)
+            end
         end
         # Column k is already reduced, the reflection is the identity
         is_reduced && isreal(α) && continue
@@ -208,8 +234,23 @@ function householder_upper_triangular!(
             end
         end
     end
-    res .= @view(A[1:n, 1:n])
-    triu!(res)
+    A
+end
+
+# StaticArrays: the Householder QR runs on a mutable copy, which doesn't escape and so
+# stays on the stack. It is faster than the QR of StaticArrays for real matrices of more
+# than 64 elements (several times from some 20 x 6 on, where that one also allocates), of
+# more than 32 if it skips the zeros of a triangular block, and for almost all complex ones.
+function calc_upper_triangular_of_qr(A::SMatrix{M,N,T}, num_dense_rows = M) where {M,N,T}
+    T <: Real && M * N <= (num_dense_rows < M ? 32 : 64) && return qr(A).R
+    B = MMatrix(A)
+    householder_reduce!(B, num_dense_rows)
+    SMatrix{N,N,T}(
+        ntuple(
+            k -> (i = (k - 1) % N + 1; j = (k - 1) ÷ N + 1; i <= j ? B[i, j] : zero(T)),
+            Val(N * N),
+        ),
+    )
 end
 
 # Below this number of elements, `householder_upper_triangular!` is faster than the

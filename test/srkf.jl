@@ -74,6 +74,42 @@
         @test abs.(R) ≈ abs.(qr(A).R)
     end
 
+    @testset "Native upper triangular of QR with a zero column" begin
+        A = [randn(6, 3); triu(randn(3, 3))]
+        A[:, 2] .= 0
+        R = KalmanFilters.householder_upper_triangular!(zeros(3, 3), copy(A), 6)
+        @test all(isfinite, R)
+        @test abs.(R) ≈ abs.(qr(A).R)
+    end
+
+    # Small real matrices are factorized by StaticArrays, larger ones and complex ones by
+    # `householder_reduce!`. Unlike the latter, the former doesn't scale against under- and
+    # overflow, so only the latter gets the extreme magnitudes.
+    @testset "Static upper triangular of QR with $T and $num_dense_rows × $n dense rows" for T in
+                                                                                         (
+            Float64,
+            ComplexF64,
+        ),
+        (num_dense_rows, n) in ((2, 1), (4, 2), (24, 12))
+
+        A = SMatrix{num_dense_rows + n,n}([randn(T, num_dense_rows, n); triu(randn(T, n, n))])
+        for B in (A, setindex(A, zero(T), num_dense_rows + n, n)), stacked in (true, false)
+            uses_householder = !(T <: Real) || length(B) > (stacked ? 32 : 64)
+            for scale in (uses_householder ? (1, 1e-170, 1e170) : (1,))
+                C = scale * B
+                R = @inferred KalmanFilters.calc_upper_triangular_of_qr(
+                    C,
+                    stacked ? num_dense_rows : size(C, 1),
+                )
+                @test R isa SMatrix{n,n,T}
+                @test istriu(R)
+                @test all(isfinite, R)
+                @test abs.(R) ≈ abs.(qr(Matrix(C)).R)
+            end
+        end
+        @test (@allocated KalmanFilters.calc_upper_triangular_of_qr(A, num_dense_rows)) == 0
+    end
+
     @testset "Time update with $T type $t" for T in (Float64, ComplexF64),
         t in ((vec = Vector, mat = Matrix), (vec = SVector{3}, mat = SMatrix{3,3}))
 
