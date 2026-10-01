@@ -1,15 +1,5 @@
-# With StaticArrays the allocating UKF and SR-UKF stay on the stack: they return static
-# arrays and don't allocate.
-function allocations_time_update(x, P, f::F, Q, weight_params) where {F}
-    time_update(x, P, f, Q, weight_params)
-    return @allocated time_update(x, P, f, Q, weight_params)
-end
-
-function allocations_measurement_update(x, P, y, h::F, R, weight_params) where {F}
-    measurement_update(x, P, y, h, R; weight_params)
-    return @allocated measurement_update(x, P, y, h, R; weight_params)
-end
-
+# With StaticArrays the allocating UKF and SR-UKF return static arrays. That they don't
+# allocate is tested in `static_allocations.jl`.
 @testset "Static $name with $T, $num_x states, $num_y measurements and $W" for (
         name,
         as_cov,
@@ -42,7 +32,6 @@ end
     @test tu_static.covariance isa cov_type
     @test get_state(tu_static) ≈ get_state(tu)
     @test get_covariance(tu_static) ≈ get_covariance(tu)
-    @test allocations_time_update(x, as_cov(P), f, as_cov(Q), weight_params) == 0
 
     mu = measurement_update(x, P, y, H, R)
     mu_static = @inferred measurement_update(x, as_cov(P), y, h, as_cov(R); weight_params)
@@ -53,7 +42,6 @@ end
     @test get_state(mu_static) ≈ get_state(mu)
     @test get_covariance(mu_static) ≈ get_covariance(mu)
     @test get_kalman_gain(mu_static) ≈ get_kalman_gain(mu)
-    @test allocations_measurement_update(x, as_cov(P), y, h, as_cov(R), weight_params) == 0
 end
 
 @testset "Static scalar $name measurement update" for (name, as_cov) in (
@@ -74,14 +62,6 @@ end
     @test get_state(mu_static) isa SVector{3,Float64}
     @test get_state(mu_static) ≈ get_state(mu)
     @test get_covariance(mu_static) ≈ get_covariance(mu)
-    @test allocations_measurement_update(
-        x,
-        P_static,
-        y,
-        h,
-        as_cov(r),
-        WanMerweWeightingParameters(),
-    ) == 0
 end
 
 @testset "Static UKF with a model that returns a regular vector" begin
