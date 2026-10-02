@@ -1,5 +1,12 @@
 # Changelog
 
+# [2.1.0](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v2.0.1...v2.1.0) (2026-10-02)
+
+
+### Features
+
+* add the in-place Extended Kalman Filter ([51f61c3](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/51f61c3dc4c40768cf757c755b5a8572c0018065))
+
 ## [2.0.1](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v2.0.0...v2.0.1) (2026-10-01)
 
 
