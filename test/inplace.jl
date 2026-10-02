@@ -3,6 +3,7 @@
 # covariance are those very objects, so a filter loop reads nothing back.
 @testset "In-place updates write into x and P ($name)" for (name, TU, MU, chol, noise) in (
     ("KF", KFTUIntermediate, KFMUIntermediate, false, identity),
+    ("EKF", EKFTUIntermediate, EKFMUIntermediate, false, identity),
     ("SRKF", SRKFTUIntermediate, SRKFMUIntermediate, true, identity),
     ("UKF", UKFTUIntermediate, UKFMUIntermediate, false, identity),
     ("SRUKF", SRUKFTUIntermediate, SRUKFMUIntermediate, true, identity),
@@ -20,10 +21,16 @@
     H = randn(num_y, num_x)
     f! = make_linear_model(F)
     h! = make_linear_model(H)
-    # The linear filters take the matrices, the sigma point filters the models.
-    linear = name in ("KF", "SRKF")
-    f_arg = linear ? F : f!
-    h_arg = linear ? H : h!
+    # The linear filters take the matrices, the EKF the Jacobians of the models and the
+    # sigma point filters the models.
+    f_arg, h_arg = if name in ("KF", "SRKF")
+        F, H
+    elseif name == "EKF"
+        JacobianPreparation(f!, zeros(num_x), zeros(num_x)),
+        JacobianPreparation(h!, zeros(num_y), zeros(num_x))
+    else
+        f!, h!
+    end
 
     expected_tu = time_update(x0, P0, F, Q)
     expected_mu =

@@ -129,5 +129,11 @@ function (@main)(args::Vector{String})::Cint
     report(io, "EKF time update", tu)
     report(io, "EKF measurement update",
         measurement_update(get_state(tu), get_covariance(tu), y, H_jacobian, R))
+    F_jacobian! = JacobianPreparation(f!, zeros(n), zeros(n); backend)
+    H_jacobian! = JacobianPreparation(h!, zeros(m), zeros(n); backend)
+    tu! = time_update!(EKFTUIntermediate(Float64, n), copy(x), copy(P), F_jacobian!, Q)
+    report(io, "EKF! time update", tu!)
+    report(io, "EKF! measurement update",
+        measurement_update!(EKFMUIntermediate(Float64, n, m), get_state(tu!), get_covariance(tu!), y, H_jacobian!, R))
     return 0
 end

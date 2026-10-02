@@ -138,6 +138,8 @@ Buffer | Variant
 --- | ---
 `KFTUIntermediate(num_states)` | (linear) Kalman-Filter time update
 `KFMUIntermediate(num_states, num_measurements)` | (linear) Kalman-Filter measurement update
+`EKFTUIntermediate(num_states)` | Extended Kalman-Filter time update
+`EKFMUIntermediate(num_states, num_measurements)` | Extended Kalman-Filter measurement update
 `SRKFTUIntermediate(num_states)` | (linear) Square-Root Kalman-Filter time update
 `SRKFMUIntermediate(num_states, num_measurements)` | (linear) Square-Root Kalman-Filter measurement update
 `UKFTUIntermediate(num_states)` | Unscented-Kalman-Filter time update
@@ -148,6 +150,14 @@ Buffer | Variant
 `AUKFMUIntermediate(num_states, num_measurements)` | Augmented Unscented-Kalman-Filter measurement update
 `SRAUKFTUIntermediate(num_states)` | Square-Root Augmented Unscented-Kalman-Filter time update
 `SRAUKFMUIntermediate(num_states, num_measurements)` | Square-Root Augmented Unscented-Kalman-Filter measurement update
+
+Like the in-place Unscented-Kalman-Filters, the in-place Extended Kalman-Filter takes an in-place model `f!(y, x)`, whose Jacobian is prepared together with an output vector:
+```julia
+f!(y, x) = mul!(y, F, x)
+f_jacobian = JacobianPreparation(f!, zeros(num_states), zeros(num_states))
+time_update!(EKFTUIntermediate(num_states), x, P, f_jacobian, Q)
+```
+ForwardDiff computes the Jacobian without allocating only in its vector mode, i.e. with a chunk size equal to the number of states. The default backend picks that for up to 12 states; for more, pass `backend = AutoForwardDiff(; chunksize = num_states)`.
 
 There is a benchmark to compare the different implementations in the benchmark folder. For the benchmark a linear model was chosen, that is supported by all variants.
 

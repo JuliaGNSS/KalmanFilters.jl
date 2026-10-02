@@ -173,4 +173,63 @@ using DifferentiationInterface
         @test @inferred(get_covariance(mu_ekf)) ≈ get_covariance(mu)
         @test @inferred(get_state(mu_ekf)) ≈ get_state(mu)
     end
+
+    @testset "In-place updates with $T" for T = (Float64,)
+        num_x, num_y = 4, 3
+        x = randn(T, 4)
+        PL = randn(T, 4, 4)
+        P = PL'PL + I
+        QL = randn(T, 4, 4)
+        Q = QL'QL
+        RL = randn(T, 3, 3)
+        R = RL'RL + I
+        y = randn(T, 3)
+        F = randn(T, 4, 4)
+        H = randn(T, 3, 4)
+        a = randn(T, 4)
+        b = randn(T, 3)
+        f(x, a) = F * x + a
+        f!(out, x, a) = (mul!(out, F, x); out .+= a)
+        h(x, b) = H * x + b
+        h!(out, x, b) = (mul!(out, H, x); out .+= b)
+
+        f_jac = JacobianPreparation(f, zero(x), Constant(a))
+        h_jac = JacobianPreparation(h, zero(x), Constant(b))
+        f!_jac = JacobianPreparation(f!, zeros(T, num_x), zero(x), Constant(a))
+        h!_jac = JacobianPreparation(h!, zeros(T, num_y), zero(x), Constant(b))
+
+        x_inplace, P_inplace = copy(x), copy(P)
+        tu = time_update(x, P, f_jac, Q)
+        tu! = time_update!(EKFTUIntermediate(T, num_x), x_inplace, P_inplace, f!_jac, Q)
+        @test get_state(tu!) === x_inplace
+        @test get_covariance(tu!) === P_inplace
+        @test x_inplace ≈ get_state(tu)
+        @test P_inplace ≈ get_covariance(tu)
+
+        mu = measurement_update(get_state(tu), get_covariance(tu), y, h_jac, R)
+        mu! = measurement_update!(
+            EKFMUIntermediate(T, num_x, num_y),
+            x_inplace,
+            P_inplace,
+            y,
+            h!_jac,
+            R,
+        )
+        @test get_state(mu!) === x_inplace
+        @test get_covariance(mu!) === P_inplace
+        @test x_inplace ≈ get_state(mu)
+        @test P_inplace ≈ get_covariance(mu)
+        @test get_innovation(mu!) ≈ get_innovation(mu)
+        @test get_innovation_covariance(mu!) ≈ get_innovation_covariance(mu)
+        @test get_kalman_gain(mu!) ≈ get_kalman_gain(mu)
+
+        # The in-place preparation takes changed contexts like the allocating one.
+        a2 = randn(T, 4)
+        f_jac2 = GradientOrJacobianContextUpdate(f_jac, Constant(a2))
+        f!_jac2 = GradientOrJacobianContextUpdate(f!_jac, Constant(a2))
+        tu2 = time_update(get_state(mu), get_covariance(mu), f_jac2, Q)
+        time_update!(EKFTUIntermediate(T, num_x), x_inplace, P_inplace, f!_jac2, Q)
+        @test x_inplace ≈ get_state(tu2)
+        @test P_inplace ≈ get_covariance(tu2)
+    end
 end
