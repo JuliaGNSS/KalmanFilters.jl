@@ -4,6 +4,8 @@
 #   julia --project=<env> benchmark/run_benchmarks.jl
 using BenchmarkTools, LinearAlgebra, KalmanFilters, CairoMakie
 using ForwardDiff # loads the DifferentiationInterface backend used by the EKF
+# The in-place EKF needs ForwardDiff's vector mode to not allocate, see the README.
+using KalmanFilters: AutoForwardDiff
 
 # The plots show the minimum time, which settles within far fewer samples than the
 # default 5 s budget per benchmark collects (see also `benchmarks.jl`). With the default,
@@ -92,8 +94,18 @@ function run_measurement_update_benchmarks(
             else
                 @belapsed measurement_update($x, $P, $y, $ekf_h, $R)
             end
-            # There is no in-place EKF measurement update
-            results.ekf.inplace[i, j] = NaN
+            ekf_inter = EKFMUIntermediate(num_states, num_measures)
+            ekf_h! = JacobianPreparation(
+                h!,
+                zero(y),
+                zero(x);
+                backend = AutoForwardDiff(; chunksize = num_states),
+            )
+            results.ekf.inplace[i, j] = if allocation
+                @allocated measurement_update!(ekf_inter, x, P, y, ekf_h!, R)
+            else
+                @belapsed measurement_update!($ekf_inter, $x, $P, $y, $ekf_h!, $R)
+            end
 
             results.ukf.allocating[i, j] = if allocation
                 @allocated measurement_update(x, P, y, h, R)
@@ -197,8 +209,18 @@ function run_time_update_benchmarks(num_state_tests; allocation = false)
         else
             @belapsed time_update($x, $P, $ekf_f, $Q)
         end
-        # There is no in-place EKF time update
-        results.ekf.inplace[i] = NaN
+        ekf_inter = EKFTUIntermediate(num_states)
+        ekf_f! = JacobianPreparation(
+            f!,
+            zero(x),
+            zero(x);
+            backend = AutoForwardDiff(; chunksize = num_states),
+        )
+        results.ekf.inplace[i] = if allocation
+            @allocated time_update!(ekf_inter, x, P, ekf_f!, Q)
+        else
+            @belapsed time_update!($ekf_inter, $x, $P, $ekf_f!, $Q)
+        end
 
         results.ukf.allocating[i] = if allocation
             @allocated time_update(x, P, f, Q)
@@ -254,8 +276,7 @@ end
 # Each filter and its square root variant share a color and are distinguished by the
 # marker (circles for the standard, triangles for the square root variant), the
 # allocating and in-place updates by the line style.
-# The EKF has neither a square root variant nor an in-place update (its in-place results
-# are NaN, which isn't drawn).
+# The EKF has no square root variant.
 const FILTER_FAMILIES = (
     (name = "KF", standard = :kf, square_root = :srkf),
     (name = "EKF", standard = :ekf, square_root = nothing),

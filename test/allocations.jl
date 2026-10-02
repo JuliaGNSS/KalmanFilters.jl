@@ -37,8 +37,14 @@ end
     P_chol = cholesky(P)
     Q_chol = cholesky(Q)
     R_chol = cholesky(R)
+    # ForwardDiff only computes the Jacobian without allocating in vector mode, i.e. with
+    # the chunk size being the number of states, which the default picks up to 12 states.
+    backend = AutoForwardDiff(; chunksize = num_x)
+    f_jacobian = JacobianPreparation(f!, zeros(num_x), zeros(num_x); backend)
+    h_jacobian = JacobianPreparation(h!, zeros(num_y), zeros(num_x); backend)
 
     @test allocations_time_update!(KFTUIntermediate(num_x), x, P, F, Q) == 0
+    @test allocations_time_update!(EKFTUIntermediate(num_x), x, P, f_jacobian, Q) == 0
     @test allocations_time_update!(SRKFTUIntermediate(num_x), x, P_chol, F, Q_chol) == 0
     @test allocations_time_update!(UKFTUIntermediate(num_x), x, P, f!, Q) == 0
     @test allocations_time_update!(SRUKFTUIntermediate(num_x), x, P_chol, f!, Q_chol) == 0
@@ -53,6 +59,14 @@ end
 
     @test allocations_measurement_update!(KFMUIntermediate(num_x, num_y), x, P, y, H, R) ==
           0
+    @test allocations_measurement_update!(
+        EKFMUIntermediate(num_x, num_y),
+        x,
+        P,
+        y,
+        h_jacobian,
+        R,
+    ) == 0
     @test allocations_measurement_update!(
         SRKFMUIntermediate(num_x, num_y),
         x,

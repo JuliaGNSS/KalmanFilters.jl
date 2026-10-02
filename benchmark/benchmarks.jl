@@ -10,6 +10,8 @@
 #   benchpkg KalmanFilters --path=. --rev=master,dirty --add=ForwardDiff,StaticArrays
 using BenchmarkTools
 using ForwardDiff # loads the DifferentiationInterface backend used by the EKF
+# The in-place EKF needs ForwardDiff's vector mode to not allocate, see the README.
+using KalmanFilters: AutoForwardDiff
 using KalmanFilters
 using LinearAlgebra
 using Random
@@ -30,6 +32,7 @@ const SIZES = ((2, 2), (10, 4), (50, 16))
 # fresh copy of the prior, made in the untimed `setup`, and runs once (`evals = 1`).
 
 random_pos_def(n) = (A = randn(n, n); A'A + n * I)
+vector_mode(num_states) = AutoForwardDiff(; chunksize = num_states)
 
 size_label(num_states) = "$num_states states"
 size_label(num_states, num_measures) = "$num_states states, $num_measures measurements"
@@ -140,6 +143,16 @@ for (num_states, _) in SIZES
         $(JacobianPreparation(f, zero(x))),
         $Q,
     ) seconds = SECONDS
+    # The in-place EKF is newer than some base revisions this suite runs against.
+    if isdefined(KalmanFilters, :EKFTUIntermediate)
+        tu["EKF"][label]["inplace"] = @benchmarkable time_update!(
+            $(EKFTUIntermediate(num_states)),
+            x,
+            P,
+            $(JacobianPreparation(f!, zero(x), zero(x); backend = vector_mode(num_states))),
+            $Q,
+        ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
+    end
 end
 
 mu = SUITE["measurement update"] = BenchmarkGroup()
@@ -232,6 +245,16 @@ for (num_states, num_measures) in SIZES
         $(JacobianPreparation(h, zero(x))),
         $R,
     ) seconds = SECONDS
+    if isdefined(KalmanFilters, :EKFMUIntermediate)
+        mu["EKF"][label]["inplace"] = @benchmarkable measurement_update!(
+            $(EKFMUIntermediate(num_states, num_measures)),
+            x,
+            P,
+            $y,
+            $(JacobianPreparation(h!, zero(y), zero(x); backend = vector_mode(num_states))),
+            $R,
+        ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
+    end
 end
 
 # A full filter loop (time update followed by measurement update) with StaticArrays, see
