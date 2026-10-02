@@ -53,7 +53,9 @@ end
 )
     x = @SVector randn(3)
     A = @SMatrix randn(3, 3)
-    P = as_cov(A'A + 3I)
+    # `A'A` needn't come out exactly symmetric, which `cholesky` of an `SMatrix` checks.
+    B = A'A
+    P = as_cov((B + B') / 2 + 3I)
     H = (@SVector randn(3))'
     h(x) = H * x
     @test allocations_measurement_update(

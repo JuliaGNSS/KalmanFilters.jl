@@ -57,7 +57,7 @@ end
     h(x) = H * x
 
     mu = measurement_update(x, P, y, H, r)
-    P_static = name == "UKF" ? P : cholesky(P)
+    P_static = name == "UKF" ? P : cholesky(Hermitian(P))
     mu_static = @inferred measurement_update(x, P_static, y, h, as_cov(r))
     @test get_state(mu_static) isa SVector{3,Float64}
     @test get_state(mu_static) ≈ get_state(mu)
