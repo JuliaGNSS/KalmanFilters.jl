@@ -7,7 +7,7 @@ Provides multiple Kalman Filters
 * (Square Root) Kalman Filter ((SR-)KF)
 * (Square Root) Unscented Kalman Filter ((SR-)UKF)
 * (Square Root) Augment Unscented Kalman Filter ((SR-)AUKF)
-* Extended Kalman Filter (EKF)
+* (Square Root) Extended Kalman Filter ((SR-)EKF)
 
 All filter implementation support the real and complexed valued inputs.
 
@@ -102,6 +102,11 @@ R_chol = cholesky(R)
 tu = time_update(x_init, P_init_chol, F, Q_chol)
 mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), measurement, H, R_chol)
 ```
+The same applies to the other filters: pass the Cholesky decompositions together with a function to get the Square Root Unscented Kalman Filter, or together with a `JacobianPreparation` or `GradientPreparation` to get the Square Root Extended Kalman Filter:
+```julia
+tu = time_update(x_init, P_init_chol, JacobianPreparation(f, zero(x_init)), Q_chol)
+mu = measurement_update(get_state(tu), get_sqrt_covariance(tu), measurement, GradientPreparation(h, zero(x_init)), R_chol)
+```
 
 ### Considered states
 
@@ -140,6 +145,8 @@ Buffer | Variant
 `KFMUIntermediate(num_states, num_measurements)` | (linear) Kalman-Filter measurement update
 `EKFTUIntermediate(num_states)` | Extended Kalman-Filter time update
 `EKFMUIntermediate(num_states, num_measurements)` | Extended Kalman-Filter measurement update
+`SREKFTUIntermediate(num_states)` | Square-Root Extended Kalman-Filter time update
+`SREKFMUIntermediate(num_states, num_measurements)` | Square-Root Extended Kalman-Filter measurement update
 `SRKFTUIntermediate(num_states)` | (linear) Square-Root Kalman-Filter time update
 `SRKFMUIntermediate(num_states, num_measurements)` | (linear) Square-Root Kalman-Filter measurement update
 `UKFTUIntermediate(num_states)` | Unscented-Kalman-Filter time update
@@ -151,11 +158,12 @@ Buffer | Variant
 `SRAUKFTUIntermediate(num_states)` | Square-Root Augmented Unscented-Kalman-Filter time update
 `SRAUKFMUIntermediate(num_states, num_measurements)` | Square-Root Augmented Unscented-Kalman-Filter measurement update
 
-Like the in-place Unscented-Kalman-Filters, the in-place Extended Kalman-Filter takes an in-place model `f!(y, x)`, whose Jacobian is prepared together with an output vector:
+Like the in-place Unscented-Kalman-Filters, the in-place (Square-Root) Extended Kalman-Filter takes an in-place model `f!(y, x)`, whose Jacobian is prepared together with an output vector:
 ```julia
 f!(y, x) = mul!(y, F, x)
 f_jacobian = JacobianPreparation(f!, zeros(num_states), zeros(num_states))
 time_update!(EKFTUIntermediate(num_states), x, P, f_jacobian, Q)
+time_update!(SREKFTUIntermediate(num_states), x, P_chol, f_jacobian, Q_chol)
 ```
 ForwardDiff computes the Jacobian without allocating only in its vector mode, i.e. with a chunk size equal to the number of states. The default backend picks that for up to 12 states; for more, pass `backend = AutoForwardDiff(; chunksize = num_states)`.
 

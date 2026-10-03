@@ -135,5 +135,15 @@ function (@main)(args::Vector{String})::Cint
     report(io, "EKF! time update", tu!)
     report(io, "EKF! measurement update",
         measurement_update!(EKFMUIntermediate(Float64, n, m), get_state(tu!), get_covariance(tu!), y, H_jacobian!, R))
+
+    # Square-root extended Kalman filter
+    tu = time_update(x, P_chol, F_jacobian, Q_chol)
+    report(io, "SREKF time update", tu)
+    report(io, "SREKF measurement update",
+        measurement_update(get_state(tu), tu.covariance, y, H_jacobian, R_chol))
+    tu! = time_update!(SREKFTUIntermediate(Float64, n), copy(x), copy(P_chol), F_jacobian!, Q_chol)
+    report(io, "SREKF! time update", tu!)
+    report(io, "SREKF! measurement update",
+        measurement_update!(SREKFMUIntermediate(Float64, n, m), get_state(tu!), tu!.covariance, y, H_jacobian!, R_chol))
     return 0
 end

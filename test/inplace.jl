@@ -5,6 +5,7 @@
     ("KF", KFTUIntermediate, KFMUIntermediate, false, identity),
     ("EKF", EKFTUIntermediate, EKFMUIntermediate, false, identity),
     ("SRKF", SRKFTUIntermediate, SRKFMUIntermediate, true, identity),
+    ("SREKF", SREKFTUIntermediate, SREKFMUIntermediate, true, identity),
     ("UKF", UKFTUIntermediate, UKFMUIntermediate, false, identity),
     ("SRUKF", SRUKFTUIntermediate, SRUKFMUIntermediate, true, identity),
     ("AUKF", AUKFTUIntermediate, AUKFMUIntermediate, false, Augment),
@@ -25,7 +26,7 @@
     # sigma point filters the models.
     f_arg, h_arg = if name in ("KF", "SRKF")
         F, H
-    elseif name == "EKF"
+    elseif name in ("EKF", "SREKF")
         JacobianPreparation(f!, zeros(num_x), zeros(num_x)),
         JacobianPreparation(h!, zeros(num_y), zeros(num_x))
     else
