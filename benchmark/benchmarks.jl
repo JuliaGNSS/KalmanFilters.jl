@@ -72,7 +72,7 @@ for (num_states, _) in SIZES
     Q_chol = cholesky(Q)
     label = size_label(num_states)
 
-    for name in ("KF", "SRKF", "UKF", "SRUKF", "AUKF", "SRAUKF", "EKF")
+    for name in ("KF", "SRKF", "UKF", "SRUKF", "AUKF", "SRAUKF", "EKF", "SREKF")
         haskey(tu, name) || (tu[name] = BenchmarkGroup())
         tu[name][label] = BenchmarkGroup()
     end
@@ -153,6 +153,22 @@ for (num_states, _) in SIZES
             $Q,
         ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
     end
+    # As is the SR-EKF.
+    if isdefined(KalmanFilters, :SREKFTUIntermediate)
+        tu["SREKF"][label]["allocating"] = @benchmarkable time_update(
+            $x,
+            $P_chol,
+            $(JacobianPreparation(f, zero(x))),
+            $Q_chol,
+        ) seconds = SECONDS
+        tu["SREKF"][label]["inplace"] = @benchmarkable time_update!(
+            $(SREKFTUIntermediate(num_states)),
+            x,
+            P_chol,
+            $(JacobianPreparation(f!, zero(x), zero(x); backend = vector_mode(num_states))),
+            $Q_chol,
+        ) setup = (x = copy($x); P_chol = copy($P_chol)) evals = 1 seconds = SECONDS
+    end
 end
 
 mu = SUITE["measurement update"] = BenchmarkGroup()
@@ -162,7 +178,7 @@ for (num_states, num_measures) in SIZES
     R_chol = cholesky(R)
     label = size_label(num_states, num_measures)
 
-    for name in ("KF", "SRKF", "UKF", "SRUKF", "AUKF", "SRAUKF", "EKF")
+    for name in ("KF", "SRKF", "UKF", "SRUKF", "AUKF", "SRAUKF", "EKF", "SREKF")
         haskey(mu, name) || (mu[name] = BenchmarkGroup())
         mu[name][label] = BenchmarkGroup()
     end
@@ -254,6 +270,23 @@ for (num_states, num_measures) in SIZES
             $(JacobianPreparation(h!, zero(y), zero(x); backend = vector_mode(num_states))),
             $R,
         ) setup = (x = copy($x); P = copy($P)) evals = 1 seconds = SECONDS
+    end
+    if isdefined(KalmanFilters, :SREKFMUIntermediate)
+        mu["SREKF"][label]["allocating"] = @benchmarkable measurement_update(
+            $x,
+            $P_chol,
+            $y,
+            $(JacobianPreparation(h, zero(x))),
+            $R_chol,
+        ) seconds = SECONDS
+        mu["SREKF"][label]["inplace"] = @benchmarkable measurement_update!(
+            $(SREKFMUIntermediate(num_states, num_measures)),
+            x,
+            P_chol,
+            $y,
+            $(JacobianPreparation(h!, zero(y), zero(x); backend = vector_mode(num_states))),
+            $R_chol,
+        ) setup = (x = copy($x); P_chol = copy($P_chol)) evals = 1 seconds = SECONDS
     end
 end
 

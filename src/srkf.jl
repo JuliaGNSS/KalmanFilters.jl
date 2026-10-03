@@ -135,6 +135,12 @@ function time_update!(
 )
     calc_apriori_state!(tu.x_apri, x, F)
     copyto!(x, tu.x_apri)
+    calc_apriori_covariance!(tu, P, F, Q)
+    KFTimeUpdate(x, P)
+end
+
+# P ← the upper factor of the QR of [P.U Fᵀ; Q.U], stored in `P`'s own factor
+function calc_apriori_covariance!(tu::SRKFTUIntermediate, P::Cholesky, F, Q::Cholesky)
     tu.puft_vcat_q[1:size(F, 1), :] .= @~ P.U * F'
     copy_upper_factor!(view(tu.puft_vcat_q, (size(F, 1)+1):size(tu.puft_vcat_q, 1), :), Q)
     R = calc_upper_triangular_of_stacked_qr_inplace!(
@@ -145,7 +151,6 @@ function time_update!(
     )
     correct_cholesky_sign!(R)
     store_upper_factor!(P, R)
-    KFTimeUpdate(x, P)
 end
 
 struct SRKFMUIntermediate{T,K<:Union{<:AbstractVector{T},<:AbstractMatrix{T}}}
@@ -182,7 +187,13 @@ function measurement_update!(
     R::Cholesky,
 )
     ỹ = calc_innovation!(mu.innovation, H, x, y)
-    dim_y = length(y)
+    calc_sqrt_posterior!(mu, x, P, ỹ, H, R)
+end
+
+# The square root measurement update for the innovation `ỹ` of the (linearized) model
+# `H`: `x` and `P` are overwritten with the posterior state and covariance.
+function calc_sqrt_posterior!(mu::SRKFMUIntermediate, x, P::Cholesky, ỹ, H, R::Cholesky)
+    dim_y = length(ỹ)
     M = mu.m
     M[1:dim_y, 1:dim_y] .= R.U
     # The pre-array's upper-right block is zero. It has to be written on every call:

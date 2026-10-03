@@ -51,7 +51,7 @@ function run_measurement_update_benchmarks(
     allocation = false,
 )
     num_measurements = length(num_measurement_tests)
-    kf_types = (:kf, :srkf, :ekf, :ukf, :srukf, :aukf, :sraukf)
+    kf_types = (:kf, :srkf, :ekf, :srekf, :ukf, :srukf, :aukf, :sraukf)
     buffers = [
         (
             inplace = zeros(length(num_state_tests), num_measurements),
@@ -105,6 +105,25 @@ function run_measurement_update_benchmarks(
                 @allocated measurement_update!(ekf_inter, x, P, y, ekf_h!, R)
             else
                 @belapsed measurement_update!($ekf_inter, $x, $P, $y, $ekf_h!, $R)
+            end
+
+            results.srekf.allocating[i, j] = if allocation
+                @allocated measurement_update(x, P_chol, y, ekf_h, R_chol)
+            else
+                @belapsed measurement_update($x, $P_chol, $y, $ekf_h, $R_chol)
+            end
+            srekf_inter = SREKFMUIntermediate(num_states, num_measures)
+            results.srekf.inplace[i, j] = if allocation
+                @allocated measurement_update!(srekf_inter, x, P_chol, y, ekf_h!, R_chol)
+            else
+                @belapsed measurement_update!(
+                    $srekf_inter,
+                    $x,
+                    $P_chol,
+                    $y,
+                    $ekf_h!,
+                    $R_chol,
+                )
             end
 
             results.ukf.allocating[i, j] = if allocation
@@ -167,7 +186,7 @@ function run_measurement_update_benchmarks(
 end
 
 function run_time_update_benchmarks(num_state_tests; allocation = false)
-    kf_types = (:kf, :srkf, :ekf, :ukf, :srukf, :aukf, :sraukf)
+    kf_types = (:kf, :srkf, :ekf, :srekf, :ukf, :srukf, :aukf, :sraukf)
     buffers = [
         (
             inplace = zeros(length(num_state_tests)),
@@ -220,6 +239,18 @@ function run_time_update_benchmarks(num_state_tests; allocation = false)
             @allocated time_update!(ekf_inter, x, P, ekf_f!, Q)
         else
             @belapsed time_update!($ekf_inter, $x, $P, $ekf_f!, $Q)
+        end
+
+        results.srekf.allocating[i] = if allocation
+            @allocated time_update(x, P_chol, ekf_f, Q_chol)
+        else
+            @belapsed time_update($x, $P_chol, $ekf_f, $Q_chol)
+        end
+        srekf_inter = SREKFTUIntermediate(num_states)
+        results.srekf.inplace[i] = if allocation
+            @allocated time_update!(srekf_inter, x, P_chol, ekf_f!, Q_chol)
+        else
+            @belapsed time_update!($srekf_inter, $x, $P_chol, $ekf_f!, $Q_chol)
         end
 
         results.ukf.allocating[i] = if allocation
@@ -276,10 +307,9 @@ end
 # Each filter and its square root variant share a color and are distinguished by the
 # marker (circles for the standard, triangles for the square root variant), the
 # allocating and in-place updates by the line style.
-# The EKF has no square root variant.
 const FILTER_FAMILIES = (
     (name = "KF", standard = :kf, square_root = :srkf),
-    (name = "EKF", standard = :ekf, square_root = nothing),
+    (name = "EKF", standard = :ekf, square_root = :srekf),
     (name = "UKF", standard = :ukf, square_root = :srukf),
     (name = "AUKF", standard = :aukf, square_root = :sraukf),
 )
