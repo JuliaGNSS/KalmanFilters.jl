@@ -37,6 +37,8 @@ export WanMerweWeightingParameters,
     AUKFMUIntermediate,
     EKFTUIntermediate,
     EKFMUIntermediate,
+    SREKFTUIntermediate,
+    SREKFMUIntermediate,
     JacobianPreparation,
     GradientPreparation,
     GradientOrJacobianContextUpdate,
@@ -106,6 +108,7 @@ include("qr.jl")
 include("kf.jl")
 include("srkf.jl")
 include("ekf.jl")
+include("srekf.jl")
 include("sigmapoints.jl")
 include("augmented_sigmapoints.jl")
 include("ukf.jl")

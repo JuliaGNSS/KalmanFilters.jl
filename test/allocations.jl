@@ -46,6 +46,13 @@ end
     @test allocations_time_update!(KFTUIntermediate(num_x), x, P, F, Q) == 0
     @test allocations_time_update!(EKFTUIntermediate(num_x), x, P, f_jacobian, Q) == 0
     @test allocations_time_update!(SRKFTUIntermediate(num_x), x, P_chol, F, Q_chol) == 0
+    @test allocations_time_update!(
+        SREKFTUIntermediate(num_x),
+        x,
+        P_chol,
+        f_jacobian,
+        Q_chol,
+    ) == 0
     @test allocations_time_update!(UKFTUIntermediate(num_x), x, P, f!, Q) == 0
     @test allocations_time_update!(SRUKFTUIntermediate(num_x), x, P_chol, f!, Q_chol) == 0
     @test allocations_time_update!(AUKFTUIntermediate(num_x), x, P, f!, Augment(Q)) == 0
@@ -73,6 +80,14 @@ end
         P_chol,
         y,
         H,
+        R_chol,
+    ) == 0
+    @test allocations_measurement_update!(
+        SREKFMUIntermediate(num_x, num_y),
+        x,
+        P_chol,
+        y,
+        h_jacobian,
         R_chol,
     ) == 0
     @test allocations_measurement_update!(UKFMUIntermediate(num_x, num_y), x, P, y, h!, R) ==
