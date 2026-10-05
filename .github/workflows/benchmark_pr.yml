@@ -34,7 +34,7 @@ jobs:
     steps:
       # Base (trusted) checkout — provides .github/scripts/bench_table.jl. The PR's own
       # code is fetched separately by benchpkg via --url, not checked out here.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
