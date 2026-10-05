@@ -26,7 +26,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
@@ -44,7 +44,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.13'
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: Install JuliaC
         # `Pkg.Apps.add` does not install the General registry on demand the way
         # `Pkg.add` does, and a fresh runner has none yet.
