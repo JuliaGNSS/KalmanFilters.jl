@@ -5,6 +5,9 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
   - package-ecosystem: "julia"
     directories:
       - "/"
