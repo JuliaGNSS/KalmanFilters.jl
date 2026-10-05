@@ -1,5 +1,12 @@
 # Changelog
 
+# [2.2.0](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v2.1.0...v2.2.0) (2026-10-05)
+
+
+### Features
+
+* add the square root Extended Kalman Filter ([a65159f](https://github.com/JuliaGNSS/KalmanFilters.jl/commit/a65159f82e50dedbaa7dd569fd38721547ce0212))
+
 # [2.1.0](https://github.com/JuliaGNSS/KalmanFilters.jl/compare/v2.0.1...v2.1.0) (2026-10-02)
 
 
