@@ -31,7 +31,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Compute the next version
-        uses: cycjimmy/semantic-release-action@v6
+        uses: cycjimmy/semantic-release-action@v8
         id: semantic-release
         env:
           GH_TOKEN: ${{ secrets.PAT }}
